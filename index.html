@@ -45,7 +45,8 @@
     color:var(--ink);
     font-family:"Hanken Grotesk","Noto Sans JP",system-ui,sans-serif;
     -webkit-font-smoothing:antialiased; font-size:14px;
-    display:flex; flex-direction:column; height:100vh; overflow:hidden;
+    display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden;
+    overscroll-behavior:none;
     letter-spacing:.005em;
   }
   ::selection { background:var(--accent-glow); }
@@ -63,8 +64,9 @@
   }
   header.app h1 {
     font-size:17px; margin:0; letter-spacing:-.01em; font-weight:700; color:var(--ink);
-    display:flex; align-items:center; gap:10px;
+    display:flex; align-items:center; gap:10px; flex-shrink:0;
   }
+  .head-main { display:flex; align-items:center; gap:14px; min-width:0; }
   header.app h1::before {
     content:""; width:8px; height:8px; border-radius:50%;
     background:var(--accent); box-shadow:0 0 0 4px var(--accent-glow), 0 0 12px var(--accent);
@@ -74,6 +76,26 @@
     padding:3px 8px; border:1px solid var(--line-strong); border-radius:5px;
   }
   .toolbar { display:flex; gap:9px; align-items:center; }
+  /* 検索ボックス */
+  .search-box {
+    display:flex; align-items:center; gap:6px; flex-shrink:1; min-width:0;
+    background:var(--panel-2); border:1px solid var(--line-strong); border-radius:8px;
+    padding:0 9px; height:36px; transition:border-color .15s, box-shadow .15s;
+  }
+  .search-box:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow); }
+  .search-box .search-ic { color:var(--muted); flex-shrink:0; }
+  .search-box:focus-within .search-ic { color:var(--accent-bright); }
+  .search-box input {
+    border:none; outline:none; background:transparent; color:var(--ink);
+    font-family:inherit; font-size:13px; width:150px; min-width:0; padding:0;
+  }
+  .search-box input::placeholder { color:var(--muted-2); }
+  .search-clear {
+    border:none; background:transparent; padding:2px; margin:0; width:20px; height:20px;
+    display:inline-flex; align-items:center; justify-content:center; border-radius:5px;
+    color:var(--muted); flex-shrink:0;
+  }
+  .search-clear:hover { background:var(--elevated); color:var(--ink); border:none; }
   .count {
     font-size:12px; color:var(--muted); margin-right:8px; font-variant-numeric:tabular-nums;
     letter-spacing:.04em;
@@ -228,9 +250,12 @@
   @media (max-width:760px){
     .sheet-wrap { padding:12px 0 80px; }
     .sheet-wrap > table { margin:0 12px; width:calc(100% - 24px); }
-    /* ヘッダーは2段組み:1段目=見出し、2段目=コントロール群(右寄せ) */
+    /* ヘッダーは2段組み:1段目=見出し+検索、2段目=コントロール群 */
     header.app { padding:10px 12px; gap:8px; flex-direction:column; align-items:stretch; }
     header.app h1 { font-size:15px; }
+    .head-main { width:100%; gap:10px; }
+    .head-main .search-box { flex:1; min-width:0; }   /* 検索は見出しの右で残り幅いっぱい */
+    .head-main .search-box input { flex:1; width:auto; min-width:0; }
     .toolbar { gap:8px; flex-wrap:wrap; justify-content:space-between; min-width:0; width:100%; }
   }
   .memo-head { padding:20px 22px 16px; border-bottom:1px solid var(--line); }
@@ -354,6 +379,14 @@
     font-size:11px; color:var(--muted); font-weight:500; font-variant-numeric:tabular-nums;
     background:var(--panel-2); border:1px solid var(--line); border-radius:20px; padding:1px 9px;
   }
+  tr.group-head .gh .gcount b { font-weight:700; color:var(--ink-dim); }
+  /* 未チェックが1以上:黄色く強調(光らせる) */
+  tr.group-head .gh .gcount.hot {
+    color:var(--warn); background:rgba(224,168,92,.12);
+    border-color:rgba(224,168,92,.5);
+    box-shadow:0 0 10px rgba(224,168,92,.25);
+  }
+  tr.group-head .gh .gcount.hot b { color:var(--warn); }
   tr.group-head .gh .gline { flex:1; height:1px; background:var(--line); }
   tr.group-head.unassigned .gh .nm { color:var(--muted); font-style:italic; }
   /* 開閉式グループ見出し */
@@ -425,8 +458,15 @@
 </head>
 <body>
   <header class="app">
-    <div style="display:flex; align-items:baseline;">
+    <div class="head-main">
       <h1>Comment Manager</h1>
+      <div class="search-box" id="searchBox">
+        <svg class="search-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input type="text" id="searchInput" placeholder="Search" autocomplete="off" spellcheck="false">
+        <button class="search-clear" id="searchClear" title="Clear" aria-label="Clear search" style="display:none;">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
     </div>
     <div class="toolbar">
       <label class="switch" id="groupSwitch" title="名前でグループ化">
@@ -495,6 +535,7 @@ let db={ persons:{}, items:{}, titles:{}, notes:{}, records:[] };
 let selectedRowId=null;
 let viewMode="flat";   // "flat" | "byPerson"
 let hideDone=false;
+let searchQuery="";   // 検索文字列(Name/Item/Title を対象に絞り込み)
 const expandedGroups=new Set();   // 展開中の人物ID(グループ表示の開閉状態。既定は空=すべて閉じる。表示設定なので保存しない)
 
 /* =========================================================
@@ -626,9 +667,20 @@ function pruneEmptyRows(){
   if(db.records.length!==before){ gcMasters(); persist(); }
 }
 
+/* 検索ヒット判定:Name / Item / Title のいずれかに一致(大小無視) */
+function matchesSearch(rec){
+  if(searchQuery==="") return true;
+  const q=searchQuery.toLowerCase();
+  const n=masterText(db.persons, rec.personId).toLowerCase();
+  const i=masterText(db.items, rec.itemId).toLowerCase();
+  const t=masterText(db.titles, rec.titleId).toLowerCase();
+  return n.includes(q) || i.includes(q) || t.includes(q);
+}
+
 function visibleRecords(){
   let rows = db.records.slice();
   if(hideDone) rows = rows.filter(r=>!r.done);
+  if(searchQuery!=="") rows = rows.filter(matchesSearch);
   // 古い順(created 昇順)。created 同値は配列順を保持
   rows.sort((a,b)=> (a.created||0)-(b.created||0));
   return rows;
@@ -643,11 +695,17 @@ function render(){
   } else {
     let n=0;
     visibleRecords().forEach(rec=>{ n++; tbody.appendChild(buildRow(rec, n, false)); });
-    tbody.appendChild(buildRow(null, n+1, true, ""));  // 末尾の追加行(人物指定なし)
+    if(searchQuery==="") tbody.appendChild(buildRow(null, n+1, true, ""));  // 末尾の追加行(検索中は出さない)
   }
 
-  const total=db.records.length, done=db.records.filter(r=>r.done).length;
-  document.getElementById("count").textContent = (total-done)+" / "+total;
+  if(searchQuery!==""){
+    // 検索中は「ヒット件数 / 全件」を表示
+    const hits=db.records.filter(matchesSearch).length;
+    document.getElementById("count").textContent = hits+" hits";
+  } else {
+    const total=db.records.length, done=db.records.filter(r=>r.done).length;
+    document.getElementById("count").textContent = (total-done)+" / "+total;
+  }
   restoreFocus(focusInfo);
 }
 
@@ -665,27 +723,38 @@ function renderByPerson(){
   // 空人物("")を末尾へ
   order.sort((a,b)=> (a===""?1:0)-(b===""?1:0));
 
-  let n=0;
+  const searching = searchQuery!=="";
   order.forEach(pid=>{
     const recs=groups.get(pid);
     const name = pid==="" ? "Unassigned" : masterText(db.persons, pid);
-    const collapsed = !expandedGroups.has(pid);   // 既定は閉じている。展開セットにある時だけ開く
-    tbody.appendChild(buildGroupHead(name, recs.length, pid==="", pid, collapsed));
-    if(collapsed){
-      // 折りたたみ中は行を出さない。ただし番号は通しで進める(展開時と一致させる)
-      n += recs.length;
-      return;
+    // 検索中は一致グループを自動展開。通常時は開閉状態に従う。
+    const collapsed = searching ? false : !expandedGroups.has(pid);
+    // 件数:通常は db.records 全体から、検索中は一致件数で集計
+    let total, remaining;
+    if(searching){
+      total = recs.length;
+      remaining = recs.filter(r=> !r.done).length;
+    } else {
+      const all = db.records.filter(r=> r.personId===pid);
+      total = all.length;
+      remaining = all.filter(r=> !r.done).length;
     }
+    tbody.appendChild(buildGroupHead(name, remaining, total, pid==="", pid, collapsed));
+    if(collapsed) return;   // 折りたたみ中は行を出さない
+    // 連番は人物ごとに 1 から振り直す
+    let n=0;
     recs.forEach(rec=>{ n++; tbody.appendChild(buildRow(rec, n, false)); });
-    // その人物の追加行(人物名を引き継ぐ)
-    if(pid!=="") tbody.appendChild(buildRow(null, n+1, true, pid));
+    // その人物の追加行(検索中は出さない)
+    if(pid!=="" && !searching) tbody.appendChild(buildRow(null, n+1, true, pid));
   });
-  // どの人物にも属さない新規追加用(人物から入力する行)
-  tbody.appendChild(buildGroupHead("+ New person", null, true, null, false));
-  tbody.appendChild(buildRow(null, n+1, true, ""));
+  // 新規追加用(検索中は出さない)
+  if(!searching){
+    tbody.appendChild(buildGroupHead("+ New person", null, null, true, null, false));
+    tbody.appendChild(buildRow(null, 1, true, ""));
+  }
 }
 
-function buildGroupHead(name, count, isUnassigned, pid, collapsed){
+function buildGroupHead(name, remaining, total, isUnassigned, pid, collapsed){
   const tr=document.createElement("tr");
   tr.className="group-head"+(isUnassigned?" unassigned":"");
   // pid が文字列(空文字含む)なら開閉対象。null("+ New person")は開閉なし。
@@ -704,7 +773,11 @@ function buildGroupHead(name, count, isUnassigned, pid, collapsed){
       +'</span>';
   }
   inner+='<span class="nm">'+escapeHtml(name)+'</span>';
-  if(count!==null) inner+='<span class="gcount">'+count+'</span>';
+  if(total!==null){
+    // 未チェック / 全件。未チェックが1以上なら黄色く強調。
+    const hot = remaining>0 ? " hot" : "";
+    inner+='<span class="gcount'+hot+'"><b>'+remaining+'</b> / '+total+'</span>';
+  }
   inner+='<span class="gline"></span>';
   wrap.innerHTML=inner;
   td.appendChild(wrap); tr.appendChild(td);
@@ -1106,6 +1179,21 @@ document.getElementById("groupToggle").addEventListener("change",(e)=>{
 /* 完了を隠す */
 document.getElementById("hideDone").addEventListener("change",(e)=>{
   hideDone=e.target.checked; render();
+});
+
+/* 検索:入力で Name/Item/Title を絞り込み */
+const searchInput=document.getElementById("searchInput");
+const searchClear=document.getElementById("searchClear");
+searchInput.addEventListener("input",()=>{
+  searchQuery=searchInput.value.trim();
+  searchClear.style.display = searchInput.value ? "" : "none";
+  render();
+});
+searchInput.addEventListener("keydown",(e)=>{
+  if(e.key==="Escape"){ searchInput.value=""; searchQuery=""; searchClear.style.display="none"; render(); searchInput.blur(); }
+});
+searchClear.addEventListener("click",()=>{
+  searchInput.value=""; searchQuery=""; searchClear.style.display="none"; render(); searchInput.focus();
 });
 
 /* 行削除:選択行で Delete(本文編集中・メモ入力中は無効) */
