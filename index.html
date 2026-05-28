@@ -123,7 +123,7 @@
 
   .main { flex:1; display:flex; overflow:hidden; position:relative; }
   .sheet-wrap {
-    flex:1; overflow:auto; padding:18px 22px 80px;
+    flex:1; overflow:auto; padding:0 22px 80px;
     overscroll-behavior:none;   /* 縦横とも余分なバウンス(引っ張り)を止める */
   }
   table { border-collapse:separate; border-spacing:0; width:100%; min-width:580px; }
@@ -131,7 +131,12 @@
     position:sticky; top:0; z-index:5;
     background:var(--bg); text-align:left;
     font-size:10px; letter-spacing:.13em; color:var(--muted); text-transform:uppercase;
-    font-weight:600; padding:0 16px 11px; height:auto; border:none;
+    font-weight:600; padding:18px 16px 11px; height:auto; border:none;
+  }
+  /* sticky ヘッダーの上端をページ背景で覆い、スクロール行がパディングの隙間から見えるのを防ぐ */
+  thead th::before {
+    content:""; position:absolute; left:0; right:0; top:-20px; height:20px;
+    background:var(--bg); pointer-events:none;
   }
   th.col-num { width:48px; text-align:center; padding-left:0; padding-right:0; }
   th.col-memo { width:62px; text-align:center; }
@@ -248,8 +253,9 @@
   @media (max-width:760px){ .memo-panel.open { width:100%; position:absolute; right:0; top:0; bottom:0; z-index:50; } }
   /* スマホ:左右パディングを詰めて、横スクロール時の左右の余白ズレ(グラグラ)を抑える */
   @media (max-width:760px){
-    .sheet-wrap { padding:12px 0 80px; }
+    .sheet-wrap { padding:0 0 80px; }
     .sheet-wrap > table { margin:0 12px; width:calc(100% - 24px); }
+    thead th { padding-top:12px; }
     /* ヘッダーは2段組み:1段目=見出し+検索、2段目=コントロール群 */
     header.app { padding:10px 12px; gap:8px; flex-direction:column; align-items:stretch; }
     header.app h1 { font-size:15px; }
