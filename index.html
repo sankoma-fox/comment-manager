@@ -256,6 +256,10 @@
     .sheet-wrap { padding:0 0 80px; }
     .sheet-wrap > table { margin:0 12px; width:calc(100% - 24px); }
     thead th { padding-top:12px; }
+    /* チェックと番号が詰まって見えないよう、間隔と区切りを持たせる */
+    th.col-check, td.check { width:40px; }
+    th.col-num, td.num { width:44px; }
+    td.check + td.num, th.col-check + th.col-num { border-left:1px solid var(--line-soft); }
     /* ヘッダーは2段組み:1段目=見出し+検索、2段目=コントロール群 */
     header.app { padding:10px 12px; gap:8px; flex-direction:column; align-items:stretch; }
     header.app h1 { font-size:15px; }
@@ -264,10 +268,16 @@
     .head-main .search-box input { flex:1; width:auto; min-width:0; }
     .toolbar { gap:8px; flex-wrap:wrap; justify-content:space-between; min-width:0; width:100%; }
   }
-  .memo-head { padding:20px 22px 16px; border-bottom:1px solid var(--line); }
+  .memo-head { padding:20px 22px 16px; border-bottom:1px solid var(--line); position:relative; }
   .memo-head .lbl { font-size:10px; letter-spacing:.18em; color:var(--muted); text-transform:uppercase; font-weight:600; }
-  .memo-head .ttl { font-size:18px; font-weight:600; margin-top:6px; word-break:break-all; color:var(--ink); }
+  .memo-head .ttl { font-size:18px; font-weight:600; margin-top:6px; word-break:break-all; color:var(--ink); padding-right:30px; }
   .memo-head .ttl.none { color:var(--muted-2); font-weight:400; }
+  .memo-close-x {
+    position:absolute; top:14px; right:14px; width:30px; height:30px; padding:0;
+    display:inline-flex; align-items:center; justify-content:center;
+    border:1px solid transparent; background:transparent; color:var(--muted); border-radius:7px;
+  }
+  .memo-close-x:hover { background:var(--panel-2); color:var(--ink); border-color:var(--line-strong); }
   .memo-link-note {
     font-size:11px; color:var(--ok); margin-top:8px; min-height:15px;
     display:flex; align-items:center; gap:5px;
@@ -310,14 +320,6 @@
     color:var(--warn); border:2px solid var(--warn); margin-bottom:2px;
   }
   .status-retry { margin-top:4px; }
-  footer.app {
-    flex-shrink:0; padding:9px 22px; font-size:11px; color:var(--muted);
-    background:var(--bg-2); border-top:1px solid var(--line); letter-spacing:.01em;
-  }
-  .kbd {
-    font-family:"SF Mono",ui-monospace,monospace; background:var(--panel-2); color:var(--ink-dim);
-    border:1px solid var(--line-strong); border-radius:5px; padding:1px 6px; font-size:11px;
-  }
 
   /* グループ化トグルスイッチ */
   .switch {
@@ -507,6 +509,9 @@
     </div>
     <aside class="memo-panel" id="memoPanel">
       <div class="memo-head">
+        <button class="memo-close-x" id="memoClose" title="Close" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
         <div class="lbl">Memo</div>
         <div class="ttl none" id="memoTitle">—</div>
         <div class="memo-link-note" id="memoLinkNote"></div>
@@ -516,7 +521,6 @@
       </div>
       <div class="memo-foot">
         <span class="saved" id="memoSaved"></span>
-        <button class="ghost" id="memoClose">Close</button>
       </div>
     </aside>
     <div class="status-overlay" id="statusOverlay">
@@ -527,10 +531,6 @@
       </div>
     </div>
   </div>
-
-  <footer class="app">
-    <span class="kbd">Click</span> a cell to edit · <span class="kbd">Enter</span> to confirm · empty rows auto-removed · autosaved
-  </footer>
 
 <script>
 "use strict";
