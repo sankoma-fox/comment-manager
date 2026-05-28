@@ -100,7 +100,10 @@
   .icon-btn svg { display:block; }
 
   .main { flex:1; display:flex; overflow:hidden; position:relative; }
-  .sheet-wrap { flex:1; overflow:auto; padding:18px 22px 80px; }
+  .sheet-wrap {
+    flex:1; overflow:auto; padding:18px 22px 80px;
+    overscroll-behavior-x:contain;   /* 横方向のバウンス(余分な引っ張り)を抑制 */
+  }
   table { border-collapse:separate; border-spacing:0; width:100%; min-width:580px; }
   thead th {
     position:sticky; top:0; z-index:5;
@@ -133,6 +136,8 @@
     transition:color .12s;
   }
   td.data .cell:empty::before { content:attr(data-ph); color:var(--muted-2); font-weight:400; }
+  /* 人物別グループの追加行:自動付与される人物名の薄字表示(通常プレースホルダより少し人物名らしく) */
+  td.data .cell.ghost-name:empty::before { color:var(--muted); font-style:italic; opacity:.7; }
   td.data.focus {
     box-shadow:inset 0 0 0 1.5px var(--accent); background:var(--elevated); z-index:8;
     border-radius:7px;
@@ -219,6 +224,20 @@
   }
   .memo-panel.open { width:380px; }
   @media (max-width:760px){ .memo-panel.open { width:100%; position:absolute; right:0; top:0; bottom:0; z-index:50; } }
+  /* スマホ:左右パディングを詰めて、横スクロール時の左右の余白ズレ(グラグラ)を抑える */
+  @media (max-width:760px){
+    .sheet-wrap { padding:12px 0 80px; }
+    .sheet-wrap > table { margin:0 12px; width:calc(100% - 24px); }
+    header.app { padding:10px 12px; gap:8px; flex-wrap:wrap; }
+    header.app h1 { font-size:15px; }
+    /* ツールバーがはみ出さないよう、縮められる・必要なら折り返す */
+    .toolbar { gap:6px; flex-wrap:wrap; justify-content:flex-end; min-width:0; }
+    .toolbar .switch .switch-label { display:none; }   /* Group/Hide のラベルは隠してトグルだけに */
+    .count { margin-right:2px; }
+  }
+  @media (max-width:380px){
+    .count { width:100%; text-align:right; margin:0; order:5; }
+  }
   .memo-head { padding:20px 22px 16px; border-bottom:1px solid var(--line); }
   .memo-head .lbl { font-size:10px; letter-spacing:.18em; color:var(--muted); text-transform:uppercase; font-weight:600; }
   .memo-head .ttl { font-size:18px; font-weight:600; margin-top:6px; word-break:break-all; color:var(--ink); }
@@ -238,6 +257,33 @@
   .memo-body textarea:disabled { background:var(--bg); color:var(--muted-2); border-style:dashed; }
   .memo-foot { padding:12px 22px 18px; display:flex; justify-content:space-between; align-items:center; }
   .memo-foot .saved { font-size:11px; color:var(--ok); display:flex; align-items:center; gap:5px; }
+
+  /* データ取得中ローディング / エラー表示 */
+  .status-overlay {
+    position:absolute; inset:0; z-index:60; display:none;
+    align-items:center; justify-content:center;
+    background:rgba(15,17,21,.78); backdrop-filter:blur(3px);
+  }
+  .status-overlay.show { display:flex; }
+  .status-box {
+    display:flex; flex-direction:column; align-items:center; gap:16px;
+    padding:30px 38px; text-align:center; max-width:340px;
+  }
+  .status-spinner {
+    width:34px; height:34px; border-radius:50%;
+    border:3px solid var(--line-strong); border-top-color:var(--accent);
+    animation:status-spin .8s linear infinite;
+  }
+  @keyframes status-spin { to { transform:rotate(360deg); } }
+  .status-msg { font-size:14px; color:var(--ink-dim); line-height:1.6; }
+  .status-overlay.error .status-msg { color:var(--ink); }
+  .status-overlay.error .status-spinner { display:none; }
+  .status-overlay.error .status-box::before {
+    content:"!"; display:flex; align-items:center; justify-content:center;
+    width:38px; height:38px; border-radius:50%; font-size:20px; font-weight:700;
+    color:var(--warn); border:2px solid var(--warn); margin-bottom:2px;
+  }
+  .status-retry { margin-top:4px; }
   footer.app {
     flex-shrink:0; padding:9px 22px; font-size:11px; color:var(--muted);
     background:var(--bg-2); border-top:1px solid var(--line); letter-spacing:.01em;
@@ -316,6 +362,16 @@
   }
   tr.group-head .gh .gline { flex:1; height:1px; background:var(--line); }
   tr.group-head.unassigned .gh .nm { color:var(--muted); font-style:italic; }
+  /* 開閉式グループ見出し */
+  tr.group-head.toggleable .gh { cursor:pointer; border-radius:7px; transition:background .12s; }
+  tr.group-head.toggleable .gh:hover { background:var(--panel-2); }
+  tr.group-head .gchev {
+    display:inline-flex; align-items:center; justify-content:center;
+    color:var(--muted); flex-shrink:0; margin-left:-2px;
+    transform:rotate(90deg); transition:transform .18s ease;
+  }
+  tr.group-head.collapsed .gchev { transform:rotate(0deg); }
+  tr.group-head.toggleable .gh:hover .gchev { color:var(--accent-bright); }
 </style>
 <script type="module">
   // Firebase 初期化(Firestore でデータをクラウド保存・複数端末で自動同期)
@@ -346,11 +402,15 @@
     uid: null,
     // 保存:db全体を1ドキュメントに書き込む
     save(data){ return setDoc(DOC, { db: data, updatedAt: Date.now() }); },
-    // 購読:クラウド側が変わるたび cb(data) が呼ばれる
-    subscribe(cb){
+    // 購読:クラウド側が変わるたび cb(data) が呼ばれる。エラー時は errCb(err)
+    subscribe(cb, errCb){
       return onSnapshot(DOC, (snap)=>{
-        if(snap.exists()){ const v=snap.data(); if(v && v.db) cb(v.db); }
-      }, (err)=>{ console.error("Firestore subscribe error:", err); });
+        if(snap.exists()){ const v=snap.data(); cb(v && v.db ? v.db : {}); }
+        else { cb({}); }   // ドキュメント未作成(初回・空)も「取得成功・データ無し」として扱う
+      }, (err)=>{
+        console.error("Firestore subscribe error:", err);
+        if(typeof errCb==="function") errCb(err);
+      });
     }
   };
 
@@ -365,7 +425,7 @@
   });
   signInAnonymously(auth).catch(err=>{
     console.error("Anonymous sign-in failed:", err);
-    alert("サインインに失敗しました。Firebase コンソールで Anonymous 認証が有効か確認してください。");
+    window.dispatchEvent(new CustomEvent("cloud-error", { detail:{ phase:"auth", error:err } }));
   });
 </script>
 </head>
@@ -419,6 +479,13 @@
         <button class="ghost" id="memoClose">Close</button>
       </div>
     </aside>
+    <div class="status-overlay" id="statusOverlay">
+      <div class="status-box" id="statusBox">
+        <div class="status-spinner" id="statusSpinner"></div>
+        <div class="status-msg" id="statusMsg">Loading…</div>
+        <button class="status-retry" id="statusRetry" style="display:none;">Retry</button>
+      </div>
+    </div>
   </div>
 
   <footer class="app">
@@ -434,6 +501,27 @@ let db={ persons:{}, items:{}, titles:{}, notes:{}, records:[] };
 let selectedRowId=null;
 let viewMode="flat";   // "flat" | "byPerson"
 let hideDone=false;
+const collapsedGroups=new Set();   // 折りたたみ中の人物ID(グループ表示の開閉状態。表示設定なので保存しない)
+
+/* =========================================================
+   ステータス表示(取得中ローディング / エラー)
+   ========================================================= */
+const statusOverlay=document.getElementById("statusOverlay");
+const statusMsg=document.getElementById("statusMsg");
+const statusRetry=document.getElementById("statusRetry");
+function showLoading(msg){
+  statusOverlay.classList.remove("error");
+  statusRetry.style.display="none";
+  statusMsg.textContent=msg||"Loading…";
+  statusOverlay.classList.add("show");
+}
+function showError(msg){
+  statusOverlay.classList.add("error","show");
+  statusMsg.textContent=msg;
+  statusRetry.style.display="";
+}
+function hideStatus(){ statusOverlay.classList.remove("show","error"); }
+statusRetry.addEventListener("click",()=>{ location.reload(); });
 
 /* クラウド同期の状態管理 */
 let cloudSaveTimer=null;     // 連続保存をまとめる
@@ -587,27 +675,52 @@ function renderByPerson(){
   order.forEach(pid=>{
     const recs=groups.get(pid);
     const name = pid==="" ? "Unassigned" : masterText(db.persons, pid);
-    tbody.appendChild(buildGroupHead(name, recs.length, pid===""));
+    const collapsed = collapsedGroups.has(pid);
+    tbody.appendChild(buildGroupHead(name, recs.length, pid==="", pid, collapsed));
+    if(collapsed){
+      // 折りたたみ中は行を出さない。ただし番号は通しで進める(展開時と一致させる)
+      n += recs.length;
+      return;
+    }
     recs.forEach(rec=>{ n++; tbody.appendChild(buildRow(rec, n, false)); });
     // その人物の追加行(人物名を引き継ぐ)
     if(pid!=="") tbody.appendChild(buildRow(null, n+1, true, pid));
   });
   // どの人物にも属さない新規追加用(人物から入力する行)
-  tbody.appendChild(buildGroupHead("+ New person", null, true));
+  tbody.appendChild(buildGroupHead("+ New person", null, true, null, false));
   tbody.appendChild(buildRow(null, n+1, true, ""));
 }
 
-function buildGroupHead(name, count, isUnassigned){
+function buildGroupHead(name, count, isUnassigned, pid, collapsed){
   const tr=document.createElement("tr");
   tr.className="group-head"+(isUnassigned?" unassigned":"");
+  // pid が文字列(空文字含む)なら開閉対象。null("+ New person")は開閉なし。
+  const toggleable = (typeof pid === "string");
+  if(toggleable){
+    tr.classList.add("toggleable");
+    if(collapsed) tr.classList.add("collapsed");
+  }
   const td=document.createElement("td");
   td.colSpan=7;
   const wrap=document.createElement("div"); wrap.className="gh";
-  let inner='<span class="nm">'+escapeHtml(name)+'</span>';
+  let inner="";
+  if(toggleable){
+    inner+='<span class="gchev" aria-hidden="true">'
+      +'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>'
+      +'</span>';
+  }
+  inner+='<span class="nm">'+escapeHtml(name)+'</span>';
   if(count!==null) inner+='<span class="gcount">'+count+'</span>';
   inner+='<span class="gline"></span>';
   wrap.innerHTML=inner;
   td.appendChild(wrap); tr.appendChild(td);
+  if(toggleable){
+    wrap.addEventListener("click",()=>{
+      if(collapsedGroups.has(pid)) collapsedGroups.delete(pid);
+      else collapsedGroups.add(pid);
+      render();
+    });
+  }
   return tr;
 }
 function escapeHtml(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
@@ -666,9 +779,12 @@ function buildRow(rec, num, isAdder, adderPerson){
     cell.dataset.ph=col.ph;
     if(isAdder){
       cell.dataset.adder="1";
-      // 人物別グループの追加行は、人物セルに所属人物を初期表示
+      // 人物別グループの追加行:人物セルは「実テキスト」ではなく薄いプレースホルダ風に表示。
+      // 他カラムに入力されると solid 表示へ切り替える(自動入力されたように見せる)。
       if(col.key==="personId" && adderPerson){
-        cell.textContent = masterText(db.persons, adderPerson);
+        cell.textContent="";
+        cell.dataset.ph = masterText(db.persons, adderPerson);   // 薄字で人物名を表示
+        cell.classList.add("ghost-name");
       } else {
         cell.textContent="";
       }
@@ -807,6 +923,22 @@ function attachCellEvents(cell, td, rec, col, isAdder){
   cell.addEventListener("compositionend", ()=>{ composing=false; openSuggest(); });
 
   cell.addEventListener("input", ()=>{
+    // 人物別グループの追加行:他カラムに入力されたら、人物セルの薄字を solid 表示へ
+    // 切り替えて「自動入力された」見た目にする。空にしたら薄字へ戻す。
+    if(isAdder && cell.dataset.adderPerson && col.key!=="personId"){
+      const tr=cell.closest("tr");
+      const nameCell=tr && tr.querySelector('.cell[data-col="personId"]');
+      if(nameCell){
+        const name=masterText(db.persons, cell.dataset.adderPerson);
+        if(cell.textContent!==""){
+          if(nameCell.textContent!==name){ nameCell.textContent=name; }
+          nameCell.classList.remove("ghost-name");
+        } else {
+          nameCell.textContent="";
+          nameCell.classList.add("ghost-name");
+        }
+      }
+    }
     if(composing) return;   // 変換中は候補を出さない(ちらつき防止)
     openSuggest();
   });
@@ -854,12 +986,7 @@ function attachCellEvents(cell, td, rec, col, isAdder){
     const text = cell.textContent;
     if(isAdder){
       const adderPerson = cell.dataset.adderPerson || "";
-      // 人物別グループの追加行では、人物セルに所属人物名が初期表示されている。
-      // それを変更せずに離れた場合は「入力なし」とみなし、新規作成しない。
-      if(col.key==="personId" && adderPerson){
-        const initial = masterText(db.persons, adderPerson);
-        if(text===initial) return;
-      }
+      // 人物セルは空(薄字プレースホルダ)で始まる。空のまま離れたら新規作成しない。
       if(text!==""){
         const nr=commitCell(null, col.key, text, true);
         // 人物別グループの追加行で、人物以外の列に入力した場合は所属人物も付与
@@ -998,6 +1125,15 @@ document.addEventListener("keydown",(e)=>{
 
 /* 起動時は空の状態で描画(データは Firestore から読み込む) */
 render();
+showLoading("Loading…");   // データ取得中のローディング表示
+
+/* 接続が一定時間つかない場合のフォールバック(初回スナップショット未達のまま) */
+let firstSnapshotDone=false;
+const connectTimeout=setTimeout(()=>{
+  if(!firstSnapshotDone){
+    showError("接続に時間がかかっています。通信環境を確認して再試行してください。");
+  }
+}, 15000);
 
 /* クラウド同期の開始 */
 let cloudStarted=false;
@@ -1006,11 +1142,35 @@ function startCloud(){
   if(!(window.__cloud && window.__cloud.ready)) return;
   cloudStarted=true;
 
-  window.__cloud.subscribe((cloudData)=>{
-    // Firestore を唯一のデータソースとして反映
-    applyCloudData(cloudData || {});
-  });
+  window.__cloud.subscribe(
+    (cloudData)=>{
+      // Firestore を唯一のデータソースとして反映
+      firstSnapshotDone=true;
+      clearTimeout(connectTimeout);
+      hideStatus();
+      applyCloudData(cloudData || {});
+    },
+    (err)=>{
+      // 購読中のエラー(権限不足・通信断など)
+      clearTimeout(connectTimeout);
+      let msg="データの取得に失敗しました。";
+      if(err && err.code==="permission-denied"){
+        msg="アクセスが拒否されました。Firestore のルールと匿名認証の設定を確認してください。";
+      }
+      showError(msg);
+    }
+  );
 }
+// サインイン失敗(匿名認証が無効など)
+window.addEventListener("cloud-error",(e)=>{
+  clearTimeout(connectTimeout);
+  const phase = e.detail && e.detail.phase;
+  if(phase==="auth"){
+    showError("サインインに失敗しました。Firebase コンソールで Anonymous 認証が有効か確認してください。");
+  } else {
+    showError("接続に失敗しました。時間をおいて再試行してください。");
+  }
+});
 // Firebase初期化が先に終わっていれば即開始、まだなら完了イベントを待つ
 if(window.__cloud && window.__cloud.ready) startCloud();
 window.addEventListener("cloud-ready", startCloud);
