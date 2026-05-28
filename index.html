@@ -487,7 +487,7 @@
         <span class="track"><span class="thumb"></span></span>
         <span class="switch-label">Hide</span>
       </label>
-      <span class="count" id="count" title="Remaining / Total">0 / 0</span>
+      <span class="count" id="count" title="Done / Total">0 / 0</span>
       <button id="btnImport" class="icon-btn" title="Import (JSON)" aria-label="Import">
         <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
       </button>
@@ -710,7 +710,7 @@ function render(){
     document.getElementById("count").textContent = hits+" hits";
   } else {
     const total=db.records.length, done=db.records.filter(r=>r.done).length;
-    document.getElementById("count").textContent = (total-done)+" / "+total;
+    document.getElementById("count").textContent = done+" / "+total;
   }
   restoreFocus(focusInfo);
 }
@@ -736,16 +736,16 @@ function renderByPerson(){
     // 検索中は一致グループを自動展開。通常時は開閉状態に従う。
     const collapsed = searching ? false : !expandedGroups.has(pid);
     // 件数:通常は db.records 全体から、検索中は一致件数で集計
-    let total, remaining;
+    let total, done;
     if(searching){
       total = recs.length;
-      remaining = recs.filter(r=> !r.done).length;
+      done = recs.filter(r=> r.done).length;
     } else {
       const all = db.records.filter(r=> r.personId===pid);
       total = all.length;
-      remaining = all.filter(r=> !r.done).length;
+      done = all.filter(r=> r.done).length;
     }
-    tbody.appendChild(buildGroupHead(name, remaining, total, pid==="", pid, collapsed));
+    tbody.appendChild(buildGroupHead(name, done, total, pid==="", pid, collapsed));
     if(collapsed) return;   // 折りたたみ中は行を出さない
     // 連番は人物ごとに 1 から振り直す
     let n=0;
@@ -760,7 +760,7 @@ function renderByPerson(){
   }
 }
 
-function buildGroupHead(name, remaining, total, isUnassigned, pid, collapsed){
+function buildGroupHead(name, done, total, isUnassigned, pid, collapsed){
   const tr=document.createElement("tr");
   tr.className="group-head"+(isUnassigned?" unassigned":"");
   // pid が文字列(空文字含む)なら開閉対象。null("+ New person")は開閉なし。
@@ -780,9 +780,9 @@ function buildGroupHead(name, remaining, total, isUnassigned, pid, collapsed){
   }
   inner+='<span class="nm">'+escapeHtml(name)+'</span>';
   if(total!==null){
-    // 未チェック / 全件。未チェックが1以上なら黄色く強調。
-    const hot = remaining>0 ? " hot" : "";
-    inner+='<span class="gcount'+hot+'"><b>'+remaining+'</b> / '+total+'</span>';
+    // チェック済み / 全件。未完了が残っている(未達)なら黄色く強調。
+    const hot = done<total ? " hot" : "";
+    inner+='<span class="gcount'+hot+'"><b>'+done+'</b> / '+total+'</span>';
   }
   inner+='<span class="gline"></span>';
   wrap.innerHTML=inner;
