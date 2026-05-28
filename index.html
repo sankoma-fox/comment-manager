@@ -102,7 +102,7 @@
   .main { flex:1; display:flex; overflow:hidden; position:relative; }
   .sheet-wrap {
     flex:1; overflow:auto; padding:18px 22px 80px;
-    overscroll-behavior-x:contain;   /* 横方向のバウンス(余分な引っ張り)を抑制 */
+    overscroll-behavior:none;   /* 縦横とも余分なバウンス(引っ張り)を止める */
   }
   table { border-collapse:separate; border-spacing:0; width:100%; min-width:580px; }
   thead th {
@@ -228,15 +228,10 @@
   @media (max-width:760px){
     .sheet-wrap { padding:12px 0 80px; }
     .sheet-wrap > table { margin:0 12px; width:calc(100% - 24px); }
-    header.app { padding:10px 12px; gap:8px; flex-wrap:wrap; }
+    /* ヘッダーは2段組み:1段目=見出し、2段目=コントロール群(右寄せ) */
+    header.app { padding:10px 12px; gap:8px; flex-direction:column; align-items:stretch; }
     header.app h1 { font-size:15px; }
-    /* ツールバーがはみ出さないよう、縮められる・必要なら折り返す */
-    .toolbar { gap:6px; flex-wrap:wrap; justify-content:flex-end; min-width:0; }
-    .toolbar .switch .switch-label { display:none; }   /* Group/Hide のラベルは隠してトグルだけに */
-    .count { margin-right:2px; }
-  }
-  @media (max-width:380px){
-    .count { width:100%; text-align:right; margin:0; order:5; }
+    .toolbar { gap:8px; flex-wrap:wrap; justify-content:space-between; min-width:0; width:100%; }
   }
   .memo-head { padding:20px 22px 16px; border-bottom:1px solid var(--line); }
   .memo-head .lbl { font-size:10px; letter-spacing:.18em; color:var(--muted); text-transform:uppercase; font-weight:600; }
@@ -339,10 +334,9 @@
   tbody tr.done td { background:var(--bg-2); }
   tbody tr.done:hover td:not(.num):not(.check) { background:var(--bg-2); }
   tbody tr.done .cell {
-    color:var(--muted-2); text-decoration:line-through; text-decoration-color:var(--muted-2);
+    color:var(--muted-2);
     pointer-events:none;
   }
-  tbody tr.done .cell:empty::before { text-decoration:none; }
   tbody tr.done td.data { cursor:default; }
   tbody tr.done .memo-dot { opacity:.4; pointer-events:none; }
   tbody tr.done td.num { color:var(--muted-2); opacity:.6; }
@@ -501,7 +495,7 @@ let db={ persons:{}, items:{}, titles:{}, notes:{}, records:[] };
 let selectedRowId=null;
 let viewMode="flat";   // "flat" | "byPerson"
 let hideDone=false;
-const collapsedGroups=new Set();   // 折りたたみ中の人物ID(グループ表示の開閉状態。表示設定なので保存しない)
+const expandedGroups=new Set();   // 展開中の人物ID(グループ表示の開閉状態。既定は空=すべて閉じる。表示設定なので保存しない)
 
 /* =========================================================
    ステータス表示(取得中ローディング / エラー)
@@ -675,7 +669,7 @@ function renderByPerson(){
   order.forEach(pid=>{
     const recs=groups.get(pid);
     const name = pid==="" ? "Unassigned" : masterText(db.persons, pid);
-    const collapsed = collapsedGroups.has(pid);
+    const collapsed = !expandedGroups.has(pid);   // 既定は閉じている。展開セットにある時だけ開く
     tbody.appendChild(buildGroupHead(name, recs.length, pid==="", pid, collapsed));
     if(collapsed){
       // 折りたたみ中は行を出さない。ただし番号は通しで進める(展開時と一致させる)
@@ -716,8 +710,8 @@ function buildGroupHead(name, count, isUnassigned, pid, collapsed){
   td.appendChild(wrap); tr.appendChild(td);
   if(toggleable){
     wrap.addEventListener("click",()=>{
-      if(collapsedGroups.has(pid)) collapsedGroups.delete(pid);
-      else collapsedGroups.add(pid);
+      if(expandedGroups.has(pid)) expandedGroups.delete(pid);
+      else expandedGroups.add(pid);
       render();
     });
   }
@@ -1106,6 +1100,7 @@ document.getElementById("fileInput").onchange=(e)=>{ if(e.target.files[0]) impor
 /* グループ化トグル(オンで名前ごとにまとめる) */
 document.getElementById("groupToggle").addEventListener("change",(e)=>{
   viewMode = e.target.checked ? "byPerson" : "flat";
+  if(viewMode==="byPerson") expandedGroups.clear();   // グループ表示にした時は全部閉じた状態から始める
   render();
 });
 /* 完了を隠す */
