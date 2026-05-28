@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comment Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* ベース:ダークグレー */
+    --bg:#0f1115;
+    --bg-2:#13161c;
+    --panel:#161a21;
+    --panel-2:#1b2027;
+    --elevated:#1e242d;
+    --ink:#e6eaf0;
+    --ink-dim:#aab3c0;
+    --muted:#6b7585;
+    --muted-2:#4d5562;
+    --line:#262c36;
+    --line-soft:#1f242d;
+    --line-strong:#333b48;
+    /* 青系アクセント */
+    --accent:#4c8dff;
+    --accent-bright:#6ba1ff;
+    --accent-dim:#2f4a7a;
+    --accent-glow:rgba(76,141,255,.16);
+    --accent-soft:#1a2536;
+    --sel:#16243a;
+    --sel-line:#3d7bd6;
+    --ok:#3fb6a8;
+    --warn:#e0a85c;
+    --row-h:44px;
+    --r:10px;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; padding:0; height:100%; }
+  body {
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(76,141,255,.06), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(76,141,255,.045), transparent 55%),
+      var(--bg);
+    color:var(--ink);
+    font-family:"Hanken Grotesk","Noto Sans JP",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased; font-size:14px;
+    display:flex; flex-direction:column; height:100vh; overflow:hidden;
+    letter-spacing:.005em;
+  }
+  ::selection { background:var(--accent-glow); }
+
+  /* スクロールバー */
+  ::-webkit-scrollbar { width:11px; height:11px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:#2a313c; border-radius:8px; border:3px solid var(--bg); }
+  ::-webkit-scrollbar-thumb:hover { background:#39424f; }
+
+  header.app {
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:14px 22px; background:rgba(19,22,28,.7); backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--line); flex-shrink:0; z-index:20;
+  }
+  header.app h1 {
+    font-size:17px; margin:0; letter-spacing:-.01em; font-weight:700; color:var(--ink);
+    display:flex; align-items:center; gap:10px;
+  }
+  header.app h1::before {
+    content:""; width:8px; height:8px; border-radius:50%;
+    background:var(--accent); box-shadow:0 0 0 4px var(--accent-glow), 0 0 12px var(--accent);
+  }
+  header.app .sub {
+    color:var(--muted); font-size:10px; letter-spacing:.22em; margin-left:11px; font-weight:600;
+    padding:3px 8px; border:1px solid var(--line-strong); border-radius:5px;
+  }
+  .toolbar { display:flex; gap:9px; align-items:center; }
+  .count {
+    font-size:12px; color:var(--muted); margin-right:8px; font-variant-numeric:tabular-nums;
+    letter-spacing:.04em;
+  }
+  button {
+    font-family:inherit; cursor:pointer; border:1px solid var(--line-strong);
+    background:var(--panel-2); color:var(--ink-dim); padding:8px 15px; border-radius:8px;
+    font-size:13px; font-weight:500; transition:all .15s ease; letter-spacing:.01em;
+  }
+  button:hover { border-color:var(--accent); color:var(--accent-bright); background:var(--elevated); }
+  button:active { transform:translateY(1px); }
+  button.primary {
+    background:linear-gradient(180deg, var(--accent-bright), var(--accent));
+    color:#fff; border:1px solid transparent; box-shadow:0 2px 10px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,.18);
+  }
+  button.primary:hover { box-shadow:0 4px 16px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,.22); color:#fff; }
+  button.ghost { border-color:transparent; background:transparent; color:var(--muted); }
+  button.ghost:hover { color:var(--ink); background:var(--panel-2); }
+  .file-input { display:none; }
+  .icon-btn {
+    width:36px; height:36px; padding:0; display:inline-flex; align-items:center;
+    justify-content:center; flex-shrink:0;
+  }
+  .icon-btn svg { display:block; }
+
+  .main { flex:1; display:flex; overflow:hidden; position:relative; }
+  .sheet-wrap { flex:1; overflow:auto; padding:18px 22px 80px; }
+  table { border-collapse:separate; border-spacing:0; width:100%; min-width:580px; }
+  thead th {
+    position:sticky; top:0; z-index:5;
+    background:var(--bg); text-align:left;
+    font-size:10px; letter-spacing:.13em; color:var(--muted); text-transform:uppercase;
+    font-weight:600; padding:0 16px 11px; height:auto; border:none;
+  }
+  th.col-num { width:48px; text-align:center; padding-left:0; padding-right:0; }
+  th.col-memo { width:62px; text-align:center; }
+
+  tbody td {
+    height:var(--row-h); padding:0; position:relative; vertical-align:middle;
+    background:var(--panel); border-top:1px solid var(--line-soft);
+    transition:background .12s;
+  }
+  /* 行の角丸:左端と右端 */
+  tbody tr td:first-child { border-left:1px solid var(--line-soft); }
+  tbody tr td:last-child { border-right:1px solid var(--line-soft); }
+  tbody tr:first-child td { border-top:1px solid var(--line); }
+  tbody tr td:first-child { border-top-left-radius:0; }
+
+  td.num {
+    width:48px; text-align:center; color:var(--muted-2); font-size:11px; font-weight:600;
+    background:var(--bg-2); user-select:none; font-variant-numeric:tabular-nums;
+  }
+  td.data { cursor:text; }
+  td.data .cell {
+    padding:0 16px; height:var(--row-h); line-height:var(--row-h);
+    white-space:nowrap; overflow:hidden; outline:none; color:var(--ink);
+    transition:color .12s;
+  }
+  td.data .cell:empty::before { content:attr(data-ph); color:var(--muted-2); font-weight:400; }
+  td.data.focus {
+    box-shadow:inset 0 0 0 1.5px var(--accent); background:var(--elevated); z-index:8;
+    border-radius:7px;
+  }
+  td.data.focus .cell { color:#fff; }
+  tbody tr:hover td:not(.num) { background:var(--panel-2); }
+  tbody tr.selected td { background:var(--sel); }
+  tbody tr.selected td:not(.num) { box-shadow:inset 0 0 0 0 transparent; }
+  tbody tr.selected td.num { background:#13243d; color:var(--accent-bright); }
+  tbody tr.selected td:first-child { box-shadow:inset 2px 0 0 var(--accent); }
+  tbody tr.adder td { background:transparent; }
+  tbody tr.adder td.num { background:transparent; color:var(--muted-2); }
+  tbody tr.adder:hover td:not(.num) { background:var(--panel); }
+  tbody tr.adder td .cell:empty::before { color:var(--muted-2); opacity:.6; }
+
+  th.col-date { width:128px; }
+  td.date {
+    width:128px; padding:0; color:var(--muted); font-size:12px;
+    font-variant-numeric:tabular-nums; white-space:nowrap;
+    letter-spacing:.02em; position:relative;
+  }
+  td.date .dcell {
+    padding:0 14px; height:var(--row-h); line-height:var(--row-h);
+    white-space:nowrap; overflow:hidden;
+    outline:none; color:var(--ink-dim); cursor:text;
+  }
+  td.date.focus { box-shadow:inset 0 0 0 1.5px var(--accent); background:var(--elevated); border-radius:7px; z-index:8; }
+  td.date.focus .dcell { color:#fff; }
+  tbody tr.done td.date .dcell { color:var(--muted-2); opacity:.6; pointer-events:none; }
+
+  td.memo-cell { text-align:center; width:62px; padding:0 10px; }
+  td.memo-cell > * { vertical-align:middle; }
+  /* 冒頭文プレビュー:既定では隠す(狭い画面ではアイコンのみ) */
+  .memo-preview {
+    display:none; font-size:12px; color:var(--muted); cursor:pointer;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    line-height:var(--row-h); flex:1; min-width:0; text-align:left;
+  }
+  .memo-preview:hover { color:var(--ink-dim); }
+  tbody tr.done .memo-preview { color:var(--muted-2); opacity:.6; pointer-events:none; }
+  .memo-dot {
+    display:inline-flex; align-items:center; justify-content:center; width:30px; height:26px;
+    border-radius:7px; font-size:12px; cursor:pointer; color:var(--muted);
+    border:1px solid transparent; transition:all .14s; flex-shrink:0;
+  }
+  .memo-dot:hover { background:var(--elevated); border-color:var(--line-strong); color:var(--accent-bright); }
+  .memo-dot.has {
+    color:var(--accent-bright); background:var(--accent-soft);
+    border-color:rgba(76,141,255,.25); font-weight:700;
+  }
+  .memo-dot .badge { font-size:9px; margin-left:2px; opacity:.85; }
+
+  /* 広い画面ではメモ列を広げ、冒頭文を1行プレビュー表示 */
+  @media (min-width:1000px){
+    th.col-memo { width:240px; text-align:left; padding-left:16px; }
+    td.memo-cell { width:240px; display:flex; align-items:center; gap:8px; padding:0 12px 0 16px; }
+    /* メモがある行:プレビューのみ表示し、鉛筆アイコンは隠す */
+    td.memo-cell.has-memo .memo-preview { display:block; }
+    td.memo-cell.has-memo .memo-dot { display:none; }
+    /* メモが空の行:プレビューは出さず、追加用アイコン(+)を表示 */
+    td.memo-cell:not(.has-memo) .memo-preview { display:none; }
+    td.memo-cell:not(.has-memo) .memo-dot { display:inline-flex; margin-left:auto; }
+  }
+
+  /* 候補 */
+  .suggest {
+    position:absolute; left:0; top:calc(100% + 2px); z-index:30;
+    background:var(--elevated); border:1px solid var(--line-strong); border-radius:9px;
+    box-shadow:0 16px 40px rgba(0,0,0,.5), 0 0 0 1px rgba(76,141,255,.08);
+    max-height:230px; overflow-y:auto; min-width:100%; width:max-content; max-width:300px;
+    padding:5px; overflow:hidden;
+  }
+  .suggest div {
+    padding:8px 12px; font-size:13px; cursor:pointer; border-radius:6px;
+    white-space:nowrap; color:var(--ink-dim); transition:all .1s;
+  }
+  .suggest div:hover, .suggest div.active { background:var(--accent-soft); color:var(--accent-bright); }
+
+  /* メモパネル */
+  .memo-panel {
+    width:0; flex-shrink:0; background:var(--bg-2);
+    border-left:1px solid var(--line); display:flex; flex-direction:column;
+    overflow:hidden; transition:width .22s cubic-bezier(.4,0,.2,1);
+  }
+  .memo-panel.open { width:380px; }
+  @media (max-width:760px){ .memo-panel.open { width:100%; position:absolute; right:0; top:0; bottom:0; z-index:50; } }
+  .memo-head { padding:20px 22px 16px; border-bottom:1px solid var(--line); }
+  .memo-head .lbl { font-size:10px; letter-spacing:.18em; color:var(--muted); text-transform:uppercase; font-weight:600; }
+  .memo-head .ttl { font-size:18px; font-weight:600; margin-top:6px; word-break:break-all; color:var(--ink); }
+  .memo-head .ttl.none { color:var(--muted-2); font-weight:400; }
+  .memo-link-note {
+    font-size:11px; color:var(--ok); margin-top:8px; min-height:15px;
+    display:flex; align-items:center; gap:5px;
+  }
+  .memo-body { flex:1; padding:16px 22px; }
+  .memo-body textarea {
+    width:100%; height:100%; resize:none; border:1px solid var(--line-strong);
+    border-radius:10px; padding:14px; font-family:inherit; font-size:14px; line-height:1.75;
+    background:var(--panel); color:var(--ink); transition:border-color .15s, box-shadow .15s;
+  }
+  .memo-body textarea::placeholder { color:var(--muted-2); }
+  .memo-body textarea:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow); }
+  .memo-body textarea:disabled { background:var(--bg); color:var(--muted-2); border-style:dashed; }
+  .memo-foot { padding:12px 22px 18px; display:flex; justify-content:space-between; align-items:center; }
+  .memo-foot .saved { font-size:11px; color:var(--ok); display:flex; align-items:center; gap:5px; }
+  footer.app {
+    flex-shrink:0; padding:9px 22px; font-size:11px; color:var(--muted);
+    background:var(--bg-2); border-top:1px solid var(--line); letter-spacing:.01em;
+  }
+  .kbd {
+    font-family:"SF Mono",ui-monospace,monospace; background:var(--panel-2); color:var(--ink-dim);
+    border:1px solid var(--line-strong); border-radius:5px; padding:1px 6px; font-size:11px;
+  }
+
+  /* グループ化トグルスイッチ */
+  .switch {
+    display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none;
+    white-space:nowrap; padding:0 2px;
+  }
+  .switch input { position:absolute; opacity:0; width:0; height:0; }
+  .switch .track {
+    position:relative; width:38px; height:22px; border-radius:11px;
+    background:var(--panel-2); border:1px solid var(--line-strong);
+    transition:background .18s, border-color .18s; flex-shrink:0;
+  }
+  .switch .thumb {
+    position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%;
+    background:var(--muted); transition:transform .18s, background .18s;
+  }
+  .switch input:checked + .track {
+    background:var(--accent); border-color:var(--accent);
+    box-shadow:0 0 0 3px var(--accent-glow);
+  }
+  .switch input:checked + .track .thumb { transform:translateX(16px); background:#fff; }
+  .switch input:focus-visible + .track { box-shadow:0 0 0 3px var(--accent-glow); }
+  .switch .switch-label {
+    font-size:12px; font-weight:600; color:var(--muted); transition:color .18s; letter-spacing:.01em;
+  }
+  .switch input:checked ~ .switch-label { color:var(--accent-bright); }
+
+  /* 行頭チェックボックス列 */
+  th.col-check { width:42px; padding:0; }
+  td.check { width:42px; text-align:center; background:var(--bg-2); user-select:none; }
+  td.check input {
+    appearance:none; -webkit-appearance:none; width:17px; height:17px; border-radius:5px;
+    border:1.5px solid var(--line-strong); background:var(--panel); cursor:pointer;
+    vertical-align:middle; position:relative; transition:all .14s; margin:0;
+  }
+  td.check input:hover { border-color:var(--accent); }
+  td.check input:checked { background:var(--accent); border-color:var(--accent); }
+  td.check input:checked::after {
+    content:""; position:absolute; left:5px; top:2px; width:4px; height:8px;
+    border:solid #fff; border-width:0 2px 2px 0; transform:rotate(45deg);
+  }
+  tbody tr.adder td.check input { visibility:hidden; }
+
+  /* 完了行:非活性表示 */
+  tbody tr.done td { background:var(--bg-2); }
+  tbody tr.done:hover td:not(.num):not(.check) { background:var(--bg-2); }
+  tbody tr.done .cell {
+    color:var(--muted-2); text-decoration:line-through; text-decoration-color:var(--muted-2);
+    pointer-events:none;
+  }
+  tbody tr.done .cell:empty::before { text-decoration:none; }
+  tbody tr.done td.data { cursor:default; }
+  tbody tr.done .memo-dot { opacity:.4; pointer-events:none; }
+  tbody tr.done td.num { color:var(--muted-2); opacity:.6; }
+
+  /* 人物別グループ見出し */
+  tr.group-head td {
+    background:var(--bg); border-top:1px solid var(--line); padding:0;
+  }
+  tr.group-head .gh {
+    display:flex; align-items:center; gap:10px; padding:16px 16px 8px;
+    font-size:13px; font-weight:600; color:var(--accent-bright); letter-spacing:.02em;
+  }
+  tr.group-head .gh .nm { color:var(--ink); }
+  tr.group-head .gh .gcount {
+    font-size:11px; color:var(--muted); font-weight:500; font-variant-numeric:tabular-nums;
+    background:var(--panel-2); border:1px solid var(--line); border-radius:20px; padding:1px 9px;
+  }
+  tr.group-head .gh .gline { flex:1; height:1px; background:var(--line); }
+  tr.group-head.unassigned .gh .nm { color:var(--muted); font-style:italic; }
+</style>
+<script type="module">
+  // Firebase 初期化(Firestore でデータをクラウド保存・複数端末で自動同期)
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore, doc, setDoc, onSnapshot }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBqVZkrGtOvvZ2edAHv15mGQT4UoX6QD1o",
+    authDomain: "comment-manager-ec9d0.firebaseapp.com",
+    projectId: "comment-manager-ec9d0",
+    storageBucket: "comment-manager-ec9d0.firebasestorage.app",
+    messagingSenderId: "93426323467",
+    appId: "1:93426323467:web:84ba6b668ae32b4969b70e"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const fdb = getFirestore(app);
+  const auth = getAuth(app);
+  const DOC = doc(fdb, "app", "main");   // データは app/main の1ドキュメントに丸ごと保存
+
+  // メインスクリプトから使えるよう、最小限のAPIをグローバルに公開
+  // ready は匿名サインイン完了後に true になる(それまで Firestore アクセスはルールに弾かれるため)
+  window.__cloud = {
+    ready: false,
+    uid: null,
+    // 保存:db全体を1ドキュメントに書き込む
+    save(data){ return setDoc(DOC, { db: data, updatedAt: Date.now() }); },
+    // 購読:クラウド側が変わるたび cb(data) が呼ばれる
+    subscribe(cb){
+      return onSnapshot(DOC, (snap)=>{
+        if(snap.exists()){ const v=snap.data(); if(v && v.db) cb(v.db); }
+      }, (err)=>{ console.error("Firestore subscribe error:", err); });
+    }
+  };
+
+  // 匿名サインイン。完了(uid 取得)を待ってから ready を立て、cloud-ready を通知する
+  onAuthStateChanged(auth, (user)=>{
+    if(user && !window.__cloud.ready){
+      window.__cloud.ready = true;
+      window.__cloud.uid = user.uid;
+      console.log("Signed in anonymously. uid =", user.uid);  // ← この uid を控える(ルール直書き用)
+      window.dispatchEvent(new Event("cloud-ready"));
+    }
+  });
+  signInAnonymously(auth).catch(err=>{
+    console.error("Anonymous sign-in failed:", err);
+    alert("サインインに失敗しました。Firebase コンソールで Anonymous 認証が有効か確認してください。");
+  });
+</script>
+</head>
+<body>
+  <header class="app">
+    <div style="display:flex; align-items:baseline;">
+      <h1>Comment Manager</h1>
+    </div>
+    <div class="toolbar">
+      <label class="switch" id="groupSwitch" title="名前でグループ化">
+        <input type="checkbox" id="groupToggle">
+        <span class="track"><span class="thumb"></span></span>
+        <span class="switch-label">Group</span>
+      </label>
+      <label class="switch" id="hideSwitch" title="完了した行を隠す">
+        <input type="checkbox" id="hideDone">
+        <span class="track"><span class="thumb"></span></span>
+        <span class="switch-label">Hide</span>
+      </label>
+      <span class="count" id="count" title="Remaining / Total">0 / 0</span>
+      <button id="btnImport" class="icon-btn" title="Import (JSON)" aria-label="Import">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+      </button>
+      <button id="btnExport" class="icon-btn primary" title="Export (JSON)" aria-label="Export">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+      </button>
+      <input type="file" id="fileInput" class="file-input" accept="application/json,.json">
+    </div>
+  </header>
+
+  <div class="main">
+    <div class="sheet-wrap">
+      <table id="sheet">
+        <thead><tr>
+          <th class="col-check"></th><th class="col-num">#</th><th>Name</th><th>Item</th><th>Title</th><th class="col-date">Date</th><th class="col-memo">Memo</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <aside class="memo-panel" id="memoPanel">
+      <div class="memo-head">
+        <div class="lbl">Memo</div>
+        <div class="ttl none" id="memoTitle">—</div>
+        <div class="memo-link-note" id="memoLinkNote"></div>
+      </div>
+      <div class="memo-body">
+        <textarea id="memoText" placeholder="Shared across all rows with this title."></textarea>
+      </div>
+      <div class="memo-foot">
+        <span class="saved" id="memoSaved"></span>
+        <button class="ghost" id="memoClose">Close</button>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="app">
+    <span class="kbd">Click</span> a cell to edit · <span class="kbd">Enter</span> to confirm · empty rows auto-removed · autosaved
+  </footer>
+
+<script>
+"use strict";
+/* =========================================================
+   モデル
+   ========================================================= */
+let db={ persons:{}, items:{}, titles:{}, notes:{}, records:[] };
+let selectedRowId=null;
+let viewMode="flat";   // "flat" | "byPerson"
+let hideDone=false;
+
+/* クラウド同期の状態管理 */
+let cloudSaveTimer=null;     // 連続保存をまとめる
+let applyingRemote=false;    // クラウドからの反映中フラグ(自分の保存ループを防ぐ)
+
+function persist(){
+  // Firestore へ保存(連続入力をまとめて、少し待ってから送る)
+  if(applyingRemote) return;           // クラウド反映中の保存はスキップ(ループ防止)
+  if(!(window.__cloud && window.__cloud.ready)) return;
+  clearTimeout(cloudSaveTimer);
+  cloudSaveTimer=setTimeout(()=>{
+    window.__cloud.save(db).catch(err=>console.error("Cloud save failed:", err));
+  }, 400);
+}
+
+/* レコードの整合補完(done/created)。クラウド受信データに使う */
+function normalizeRecords(){
+  db.records.forEach((r,i)=>{
+    if(typeof r.done!=="boolean") r.done=false;
+    if(typeof r.created!=="number") r.created = Date.now() - (db.records.length-i)*1000;
+  });
+}
+
+/* クラウドの最新データを受け取って画面に反映 */
+function applyCloudData(data){
+  applyingRemote=true;
+  try{
+    db=Object.assign({persons:{},items:{},titles:{},notes:{},records:[]}, data);
+    normalizeRecords();
+    pruneEmptyRows();   // 受信データ内の空行(人物・アイテム・タイトルが全て空)を掃除
+    // メモパネルで選択中の行がクラウド更新で消えていたら閉じる
+    if(selectedRowId && !db.records.some(r=>r.id===selectedRowId)){
+      selectedRowId=null;
+      if(typeof memoPanel!=="undefined" && memoPanel) memoPanel.classList.remove("open");
+    } else if(selectedRowId && typeof refreshMemoPanel==="function"){
+      refreshMemoPanel();   // 残っていればメモ内容を最新に
+    }
+    render();
+  } finally {
+    applyingRemote=false;
+  }
+}
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+
+function resolveMaster(map,text){ if(text==="") return ""; for(const id in map){ if(map[id]===text) return id; } const id=uid(); map[id]=text; return id; }
+function masterText(map,id){ return id===""?"":(map[id]||""); }
+function gcMasters(){
+  const uP=new Set(),uI=new Set(),uT=new Set();
+  db.records.forEach(r=>{ uP.add(r.personId); uI.add(r.itemId); uT.add(r.titleId); });
+  for(const id in db.persons) if(!uP.has(id)) delete db.persons[id];
+  for(const id in db.items)   if(!uI.has(id)) delete db.items[id];
+  for(const id in db.titles)  if(!uT.has(id)){ delete db.titles[id]; delete db.notes[id]; }
+}
+const COLS=[
+  { key:"personId", map:()=>db.persons, ph:"Name" },
+  { key:"itemId",   map:()=>db.items,   ph:"Item" },
+  { key:"titleId",  map:()=>db.titles,  ph:"Title" },
+];
+function titleUseCount(tid){ if(tid==="") return 0; let c=0; db.records.forEach(r=>{ if(r.titleId===tid) c++; }); return c; }
+
+/* =========================================================
+   セル値の確定書き込み
+   ========================================================= */
+function commitCell(rec, colKey, text, isAdderRec){
+  // 追加行から新規レコードを作るケース
+  if(isAdderRec){
+    if(text==="") return null;
+    const nr={ id:uid(), personId:"", itemId:"", titleId:"", done:false, created:Date.now() };
+    if(colKey==="personId") nr.personId=resolveMaster(db.persons,text);
+    if(colKey==="itemId")   nr.itemId  =resolveMaster(db.items,text);
+    if(colKey==="titleId")  nr.titleId =resolveMaster(db.titles,text);
+    db.records.push(nr); gcMasters(); persist();
+    return nr;
+  }
+  if(colKey==="personId") rec.personId=resolveMaster(db.persons,text);
+  if(colKey==="itemId")   rec.itemId  =resolveMaster(db.items,text);
+  if(colKey==="titleId")  rec.titleId =resolveMaster(db.titles,text);
+  gcMasters(); persist();
+  return rec;
+}
+
+/* =========================================================
+   描画(行は通常レコード + 末尾に1つの追加行)
+   重要:DOMは毎回作り直すが、編集はDOM差し替えに依存せず
+   contenteditable をそのまま使うので、クリックは常に有効。
+   ========================================================= */
+const tbody=document.getElementById("tbody");
+
+/* 日付整形 */
+function fmtDate(ts){
+  if(!ts) return null;
+  const d=new Date(ts);
+  const z=n=>("0"+n).slice(-2);
+  return {
+    date: d.getFullYear()+"/"+z(d.getMonth()+1)+"/"+z(d.getDate()),
+    time: z(d.getHours())+":"+z(d.getMinutes())
+  };
+}
+
+/* レコードが完全に空か(人物・アイテム・タイトルすべて空) */
+function isEmptyRecord(r){
+  return r.personId==="" && r.itemId==="" && r.titleId==="";
+}
+/* 空行を削除(メモだけ残っていてもタイトルが空なら紐づけ先がないので対象) */
+function pruneEmptyRows(){
+  const before=db.records.length;
+  db.records = db.records.filter(r=> !isEmptyRecord(r));
+  if(db.records.length!==before){ gcMasters(); persist(); }
+}
+
+function visibleRecords(){
+  let rows = db.records.slice();
+  if(hideDone) rows = rows.filter(r=>!r.done);
+  // 古い順(created 昇順)。created 同値は配列順を保持
+  rows.sort((a,b)=> (a.created||0)-(b.created||0));
+  return rows;
+}
+
+function render(){
+  const focusInfo = captureFocus();
+  tbody.innerHTML="";
+
+  if(viewMode==="byPerson"){
+    renderByPerson();
+  } else {
+    let n=0;
+    visibleRecords().forEach(rec=>{ n++; tbody.appendChild(buildRow(rec, n, false)); });
+    tbody.appendChild(buildRow(null, n+1, true, ""));  // 末尾の追加行(人物指定なし)
+  }
+
+  const total=db.records.length, done=db.records.filter(r=>r.done).length;
+  document.getElementById("count").textContent = (total-done)+" / "+total;
+  restoreFocus(focusInfo);
+}
+
+/* 人物別グループ表示 */
+function renderByPerson(){
+  const rows = visibleRecords();
+  // 人物ID -> レコード配列。空人物は最後に「未割り当て」として。
+  const groups = new Map();   // personId => [records]
+  const order = [];           // 人物IDの登場順
+  rows.forEach(r=>{
+    const key=r.personId;
+    if(!groups.has(key)){ groups.set(key, []); order.push(key); }
+    groups.get(key).push(r);
+  });
+  // 空人物("")を末尾へ
+  order.sort((a,b)=> (a===""?1:0)-(b===""?1:0));
+
+  let n=0;
+  order.forEach(pid=>{
+    const recs=groups.get(pid);
+    const name = pid==="" ? "Unassigned" : masterText(db.persons, pid);
+    tbody.appendChild(buildGroupHead(name, recs.length, pid===""));
+    recs.forEach(rec=>{ n++; tbody.appendChild(buildRow(rec, n, false)); });
+    // その人物の追加行(人物名を引き継ぐ)
+    if(pid!=="") tbody.appendChild(buildRow(null, n+1, true, pid));
+  });
+  // どの人物にも属さない新規追加用(人物から入力する行)
+  tbody.appendChild(buildGroupHead("+ New person", null, true));
+  tbody.appendChild(buildRow(null, n+1, true, ""));
+}
+
+function buildGroupHead(name, count, isUnassigned){
+  const tr=document.createElement("tr");
+  tr.className="group-head"+(isUnassigned?" unassigned":"");
+  const td=document.createElement("td");
+  td.colSpan=7;
+  const wrap=document.createElement("div"); wrap.className="gh";
+  let inner='<span class="nm">'+escapeHtml(name)+'</span>';
+  if(count!==null) inner+='<span class="gcount">'+count+'</span>';
+  inner+='<span class="gline"></span>';
+  wrap.innerHTML=inner;
+  td.appendChild(wrap); tr.appendChild(td);
+  return tr;
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+/* レンダー前後でフォーカス位置を保つ(入力が途切れない) */
+function captureFocus(){
+  const el=document.activeElement;
+  if(el && el.classList && el.classList.contains("cell")){
+    return { rowId:el.dataset.rowId, col:el.dataset.col, adder:el.dataset.adder==="1" };
+  }
+  return null;
+}
+function restoreFocus(info){
+  if(!info) return;
+  let sel;
+  if(info.adder) sel='td.data .cell[data-adder="1"][data-col="'+info.col+'"]';
+  else sel='td.data .cell[data-row-id="'+info.rowId+'"][data-col="'+info.col+'"]';
+  const el=tbody.querySelector(sel);
+  if(el){ placeCaretEnd(el); el.parentElement.classList.add("focus"); }
+}
+function placeCaretEnd(el){
+  el.focus();
+  const r=document.createRange(); r.selectNodeContents(el); r.collapse(false);
+  const s=window.getSelection(); s.removeAllRanges(); s.addRange(r);
+}
+
+function buildRow(rec, num, isAdder, adderPerson){
+  const tr=document.createElement("tr");
+  if(isAdder) tr.classList.add("adder");
+  if(rec && rec.id===selectedRowId) tr.classList.add("selected");
+  if(rec && rec.done) tr.classList.add("done");
+
+  // チェック列
+  const tdCheck=document.createElement("td"); tdCheck.className="check";
+  const chk=document.createElement("input"); chk.type="checkbox";
+  if(rec){
+    chk.checked=!!rec.done;
+    chk.title = rec.done ? "Mark as not done" : "Mark as done";
+    chk.addEventListener("change",()=> toggleDone(rec.id, chk.checked));
+  }
+  tdCheck.appendChild(chk);
+  tr.appendChild(tdCheck);
+
+  const tdNum=document.createElement("td");
+  tdNum.className="num"; tdNum.textContent=isAdder?"+":num;
+  tr.appendChild(tdNum);
+
+  COLS.forEach(col=>{
+    const td=document.createElement("td"); td.className="data";
+    const cell=document.createElement("div");
+    cell.className="cell";
+    const editable = !(rec && rec.done);   // 完了行は編集不可
+    cell.contentEditable = editable ? "true" : "false";
+    cell.spellcheck=false;
+    cell.dataset.col=col.key;
+    cell.dataset.ph=col.ph;
+    if(isAdder){
+      cell.dataset.adder="1";
+      // 人物別グループの追加行は、人物セルに所属人物を初期表示
+      if(col.key==="personId" && adderPerson){
+        cell.textContent = masterText(db.persons, adderPerson);
+      } else {
+        cell.textContent="";
+      }
+      cell.dataset.adderPerson = adderPerson || "";
+    } else {
+      cell.dataset.rowId=rec.id;
+      cell.textContent = masterText(col.map(), rec[col.key]);
+    }
+    attachCellEvents(cell, td, rec, col, isAdder);
+    td.appendChild(cell);
+    tr.appendChild(td);
+  });
+
+  // 日付セル(自動記録・クリックで手動編集可)
+  const tdDate=document.createElement("td"); tdDate.className="date";
+  if(!isAdder){
+    const dcell=document.createElement("div");
+    dcell.className="dcell";
+    dcell.contentEditable = rec.done ? "false" : "true";
+    dcell.spellcheck=false;
+    dcell.dataset.dateRow=rec.id;
+    const f=fmtDate(rec.created);
+    dcell.textContent = f ? f.date : "";
+    attachDateEvents(dcell, tdDate, rec);
+    tdDate.appendChild(dcell);
+  }
+  tr.appendChild(tdDate);
+
+  const tdMemo=document.createElement("td"); tdMemo.className="memo-cell";
+  if(!isAdder){
+    const memo=(db.notes[rec.titleId]||"").trim();
+    const cnt=titleUseCount(rec.titleId);
+    if(memo) tdMemo.classList.add("has-memo");   // メモ有無で表示を出し分け
+
+    // 冒頭文プレビュー(広い画面でのみ表示。1行・はみ出しは…で省略)
+    const preview=document.createElement("span");
+    preview.className="memo-preview";
+    // 改行は空白に置換して1行に
+    preview.textContent = memo ? memo.replace(/\s+/g," ") : "";
+
+    const dot=document.createElement("div"); dot.className="memo-dot";
+    if(memo){ dot.classList.add("has"); dot.innerHTML="&#9998;"+(cnt>1?'<span class="badge">'+cnt+'</span>':''); }
+    else dot.textContent="+";
+    dot.title = rec.titleId==="" ? "Enter a title first" : "Open memo";
+
+    // プレビューもクリックでメモを開けるように
+    const open=()=>{ if(!rec.done) selectRow(rec.id); };
+    dot.addEventListener("click", open);
+    preview.addEventListener("click", open);
+
+    tdMemo.appendChild(preview);
+    tdMemo.appendChild(dot);
+  }
+  tr.appendChild(tdMemo);
+  return tr;
+}
+
+function toggleDone(id, val){
+  const rec=db.records.find(r=>r.id===id);
+  if(!rec) return;
+  rec.done=val;
+  // 完了にした行が選択中ならメモパネルを閉じる
+  if(val && selectedRowId===id){ selectedRowId=null; memoPanel.classList.remove("open"); }
+  persist(); render();
+}
+
+/* 日付の手動編集。YYYY/MM/DD(区切りは / - . 空白いずれも可)を受け付ける */
+function parseDateInput(str){
+  const s=str.trim();
+  if(!s) return null;
+  const m=s.match(/^(\d{4})\s*[\/\-\.年]\s*(\d{1,2})\s*[\/\-\.月]\s*(\d{1,2})\s*日?$/);
+  if(!m) return null;
+  const y=+m[1], mo=+m[2], d=+m[3];
+  if(mo<1||mo>12||d<1||d>31) return null;
+  const dt=new Date(y, mo-1, d, 12, 0, 0); // 正午で固定(タイムゾーンずれ回避)
+  // 実在日チェック(2月30日などを弾く)
+  if(dt.getFullYear()!==y || dt.getMonth()!==mo-1 || dt.getDate()!==d) return null;
+  return dt.getTime();
+}
+function attachDateEvents(dcell, td, rec){
+  dcell.addEventListener("focus", ()=> td.classList.add("focus"));
+  let composing=false;
+  dcell.addEventListener("compositionstart",()=>composing=true);
+  dcell.addEventListener("compositionend",()=>composing=false);
+  dcell.addEventListener("keydown",(e)=>{
+    if(e.isComposing||e.keyCode===229) return;
+    if(e.key==="Enter"){ e.preventDefault(); dcell.blur(); }
+    else if(e.key==="Escape"){ const f=fmtDate(rec.created); dcell.textContent=f?f.date:""; dcell.blur(); }
+  });
+  dcell.addEventListener("blur", ()=>{
+    td.classList.remove("focus");
+    const f=fmtDate(rec.created);
+    const cur=f?f.date:"";
+    const txt=dcell.textContent.trim();
+    if(txt===cur) return;            // 変更なし
+
+    // 日付を空にした場合
+    if(txt===""){
+      // 人物・アイテム・タイトルがすべて空なら、この行ごと削除
+      if(rec.personId==="" && rec.itemId==="" && rec.titleId===""){
+        db.records = db.records.filter(r=>r.id!==rec.id);
+        if(selectedRowId===rec.id){ selectedRowId=null; memoPanel.classList.remove("open"); }
+        gcMasters(); persist(); render();
+        return;
+      }
+      // 内容が残っているなら日付は必須 → 元に戻す
+      dcell.textContent=cur;
+      return;
+    }
+
+    const ts=parseDateInput(txt);
+    if(ts===null){
+      // パース不可 → 元に戻す
+      dcell.textContent=cur;
+      return;
+    }
+    rec.created=ts;
+    persist();
+    render();                        // 並び順(古い順)に反映
+  });
+}
+
+/* =========================================================
+   セルのイベント:contenteditable + 候補
+   ========================================================= */
+function closeSuggest(){ const b=document.querySelector(".suggest"); if(b) b.remove(); }
+
+function attachCellEvents(cell, td, rec, col, isAdder){
+  const map=col.map();
+  let activeIdx=-1, sItems=[];
+
+  cell.addEventListener("focus", ()=>{ td.classList.add("focus"); });
+
+  let composing=false;
+  cell.addEventListener("compositionstart", ()=>{ composing=true; });
+  cell.addEventListener("compositionend", ()=>{ composing=false; openSuggest(); });
+
+  cell.addEventListener("input", ()=>{
+    if(composing) return;   // 変換中は候補を出さない(ちらつき防止)
+    openSuggest();
+  });
+
+  function openSuggest(){
+    closeSuggest(); activeIdx=-1; sItems=[];
+    const v=cell.textContent;
+    if(!v) return;
+    const seen=new Set(), matches=[];
+    for(const id in map){ const t=map[id]; if(t==="" || seen.has(t)) continue; seen.add(t); if(t.includes(v) && t!==v) matches.push(t); }
+    if(!matches.length) return;
+    const box=document.createElement("div"); box.className="suggest";
+    matches.slice(0,30).forEach(t=>{
+      const d=document.createElement("div"); d.textContent=t;
+      d.addEventListener("mousedown",(e)=>{ e.preventDefault(); cell.textContent=t; closeSuggest(); commit(); });
+      box.appendChild(d);
+    });
+    sItems=Array.from(box.children);
+    td.appendChild(box);
+  }
+  function highlight(){ sItems.forEach((el,i)=>el.classList.toggle("active",i===activeIdx)); }
+
+  cell.addEventListener("keydown",(e)=>{
+    // IME変換確定のEnterはセル確定として扱わない
+    if(e.isComposing || e.keyCode===229) return;
+    const box=document.querySelector(".suggest");
+    if(e.key==="ArrowDown" && box){ e.preventDefault(); activeIdx=Math.min(activeIdx+1,sItems.length-1); highlight(); }
+    else if(e.key==="ArrowUp" && box){ e.preventDefault(); activeIdx=Math.max(activeIdx-1,0); highlight(); }
+    else if(e.key==="Enter"){
+      e.preventDefault();
+      if(box&&activeIdx>=0) cell.textContent=sItems[activeIdx].textContent;
+      closeSuggest();
+      cell.blur();   // blur 側で commit を一括処理(二重防止)
+    }
+    else if(e.key==="Escape"){ closeSuggest(); cell.blur(); }
+  });
+
+  cell.addEventListener("blur", ()=>{
+    td.classList.remove("focus");
+    setTimeout(closeSuggest, 100);
+    commit();
+  });
+
+  function commit(){
+    const text = cell.textContent;
+    if(isAdder){
+      const adderPerson = cell.dataset.adderPerson || "";
+      // 人物別グループの追加行では、人物セルに所属人物名が初期表示されている。
+      // それを変更せずに離れた場合は「入力なし」とみなし、新規作成しない。
+      if(col.key==="personId" && adderPerson){
+        const initial = masterText(db.persons, adderPerson);
+        if(text===initial) return;
+      }
+      if(text!==""){
+        const nr=commitCell(null, col.key, text, true);
+        // 人物別グループの追加行で、人物以外の列に入力した場合は所属人物も付与
+        if(nr && adderPerson && col.key!=="personId" && nr.personId===""){
+          nr.personId = adderPerson;
+          persist();
+        }
+        render();   // 追加行が本物の行になったので再描画
+        if(nr){
+          const el=tbody.querySelector('td.data .cell[data-row-id="'+nr.id+'"][data-col="'+col.key+'"]');
+          if(el) placeCaretEnd(el);
+        }
+      }
+      // 空のまま離れた場合は何もしない(再描画もしない=チラつき防止)
+    } else {
+      const before = masterText(map, rec[col.key]);
+      if(text!==before){
+        commitCell(rec, col.key, text, false);
+        // 3列すべて空になったらこの行を削除
+        if(isEmptyRecord(rec)){
+          db.records = db.records.filter(r=>r.id!==rec.id);
+          if(selectedRowId===rec.id){ selectedRowId=null; memoPanel.classList.remove("open"); }
+          gcMasters(); persist(); render();
+          return;
+        }
+        if(col.key==="titleId" && selectedRowId===rec.id) refreshMemoPanel();
+        render();   // メモバッジ・件数の更新のため
+      }
+      // 値が変わっていなければ再描画しない(無駄なチラつきを防ぐ)
+    }
+  }
+}
+
+/* =========================================================
+   メモパネル
+   ========================================================= */
+const memoPanel=document.getElementById("memoPanel");
+const memoText=document.getElementById("memoText");
+const memoTitle=document.getElementById("memoTitle");
+const memoLinkNote=document.getElementById("memoLinkNote");
+const memoSaved=document.getElementById("memoSaved");
+
+function selectRow(id){ selectedRowId=id; memoPanel.classList.add("open"); refreshMemoPanel(); render(); }
+function refreshMemoPanel(){
+  const rec=db.records.find(r=>r.id===selectedRowId);
+  if(!rec){ memoPanel.classList.remove("open"); return; }
+  const tText=masterText(db.titles, rec.titleId);
+  if(rec.titleId===""){
+    memoTitle.textContent="No title"; memoTitle.classList.add("none");
+    memoText.value=""; memoText.disabled=true; memoLinkNote.textContent="Enter a title to add a memo";
+  } else {
+    memoTitle.textContent=tText; memoTitle.classList.remove("none");
+    memoText.disabled=false;
+    // 入力中(textareaにフォーカス)ならクラウド更新で上書きしない
+    if(document.activeElement!==memoText){ memoText.value=db.notes[rec.titleId]||""; }
+    const cnt=titleUseCount(rec.titleId);
+    memoLinkNote.textContent = cnt>1 ? ("Shared across "+cnt+" rows") : "";
+  }
+  memoSaved.textContent="";
+}
+let saveTimer=null;
+memoText.addEventListener("input",()=>{
+  const rec=db.records.find(r=>r.id===selectedRowId);
+  if(!rec || rec.titleId==="") return;
+  db.notes[rec.titleId]=memoText.value; persist();
+  memoSaved.textContent="Saved";
+  clearTimeout(saveTimer); saveTimer=setTimeout(()=>memoSaved.textContent="",1500);
+  render();
+});
+/* メモパネルを閉じる(共通) */
+function closeMemo(){
+  if(!memoPanel.classList.contains("open")) return;
+  memoPanel.classList.remove("open");
+  selectedRowId=null;
+  render();
+}
+document.getElementById("memoClose").addEventListener("click", closeMemo);
+
+/* パネルの外側をクリックしたら閉じる(パネル内・メモアイコン・プレビューは除く) */
+document.addEventListener("mousedown",(e)=>{
+  if(!memoPanel.classList.contains("open")) return;
+  // パネル内のクリックは閉じない
+  if(memoPanel.contains(e.target)) return;
+  // メモを開く要素(アイコン/プレビュー)のクリックは selectRow 側に任せる
+  if(e.target.closest(".memo-dot") || e.target.closest(".memo-preview")) return;
+  closeMemo();
+});
+
+/* =========================================================
+   JSON 入出力
+   ========================================================= */
+function exportJSON(){
+  const blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"});
+  const a=document.createElement("a"); const d=new Date();
+  const s=d.getFullYear()+("0"+(d.getMonth()+1)).slice(-2)+("0"+d.getDate()).slice(-2);
+  a.href=URL.createObjectURL(blob); a.download="comment-manager-"+s+".json"; a.click(); URL.revokeObjectURL(a.href);
+}
+function importJSON(file){
+  const r=new FileReader();
+  r.onload=()=>{ try{
+    const data=JSON.parse(r.result);
+    if(!data.records||!data.persons) throw new Error("Invalid format");
+    if(!confirm("Replace current data with the imported file?")) return;
+    db=Object.assign({persons:{},items:{},titles:{},notes:{},records:[]}, data);
+    db.records.forEach((r,i)=>{
+      if(typeof r.done!=="boolean") r.done=false;
+      if(typeof r.created!=="number") r.created = Date.now() - (db.records.length-i)*1000;
+    });
+    selectedRowId=null; memoPanel.classList.remove("open"); persist(); render(); alert("Imported.");
+  }catch(e){ alert("Could not import: "+e.message); } };
+  r.readAsText(file);
+}
+document.getElementById("btnExport").onclick=exportJSON;
+document.getElementById("btnImport").onclick=()=>document.getElementById("fileInput").click();
+document.getElementById("fileInput").onchange=(e)=>{ if(e.target.files[0]) importJSON(e.target.files[0]); e.target.value=""; };
+
+/* グループ化トグル(オンで名前ごとにまとめる) */
+document.getElementById("groupToggle").addEventListener("change",(e)=>{
+  viewMode = e.target.checked ? "byPerson" : "flat";
+  render();
+});
+/* 完了を隠す */
+document.getElementById("hideDone").addEventListener("change",(e)=>{
+  hideDone=e.target.checked; render();
+});
+
+/* 行削除:選択行で Delete(本文編集中・メモ入力中は無効) */
+document.addEventListener("keydown",(e)=>{
+  if(e.key==="Delete" && selectedRowId && document.activeElement===document.body){
+    if(confirm("Delete the selected row?")){
+      db.records=db.records.filter(r=>r.id!==selectedRowId);
+      selectedRowId=null; memoPanel.classList.remove("open"); gcMasters(); persist(); render();
+    }
+  }
+});
+
+/* 起動時は空の状態で描画(データは Firestore から読み込む) */
+render();
+
+/* クラウド同期の開始 */
+let cloudStarted=false;
+function startCloud(){
+  if(cloudStarted) return;
+  if(!(window.__cloud && window.__cloud.ready)) return;
+  cloudStarted=true;
+
+  window.__cloud.subscribe((cloudData)=>{
+    // Firestore を唯一のデータソースとして反映
+    applyCloudData(cloudData || {});
+  });
+}
+// Firebase初期化が先に終わっていれば即開始、まだなら完了イベントを待つ
+if(window.__cloud && window.__cloud.ready) startCloud();
+window.addEventListener("cloud-ready", startCloud);
+</script>
+</body>
+</html>
