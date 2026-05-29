@@ -229,6 +229,80 @@
     td.memo-cell:not(.has-memo) .memo-dot { display:inline-flex; margin-left:auto; }
   }
 
+  /* URL列(Title と 1:1。Memo と同じ作り) */
+  th.col-url { width:62px; text-align:center; }
+  td.url-cell { text-align:center; width:62px; padding:0 10px; }
+  td.url-cell > * { vertical-align:middle; }
+  .url-preview {
+    display:none; font-size:12px; color:var(--muted); cursor:pointer;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    line-height:var(--row-h); flex:1; min-width:0; text-align:left;
+  }
+  .url-preview:hover { color:var(--ink-dim); }
+  tbody tr.done .url-preview { color:var(--muted-2); opacity:.6; pointer-events:none; }
+  .url-dot {
+    display:inline-flex; align-items:center; justify-content:center; width:30px; height:26px;
+    border-radius:7px; font-size:13px; cursor:pointer; color:var(--muted);
+    border:1px solid transparent; transition:all .14s; flex-shrink:0;
+  }
+  .url-dot:hover { background:var(--elevated); border-color:var(--line-strong); color:var(--accent-bright); }
+  .url-dot.has {
+    color:var(--accent-bright); background:var(--accent-soft);
+    border-color:rgba(76,141,255,.25);
+  }
+  @media (min-width:1000px){
+    th.col-url { width:200px; text-align:left; padding-left:16px; }
+    td.url-cell { width:200px; display:flex; align-items:center; gap:8px; padding:0 12px 0 16px; }
+    td.url-cell.has-url .url-preview { display:block; }
+    td.url-cell.has-url .url-dot { display:none; }
+    td.url-cell:not(.has-url) .url-preview { display:none; }
+    td.url-cell:not(.has-url) .url-dot { display:inline-flex; margin-left:auto; }
+  }
+  tbody tr.done .url-dot { opacity:.4; pointer-events:none; }
+
+  /* URLパネル本体(memo-panel と同じ枠を使い、入力欄+iframeプレビューを縦に並べる) */
+  .url-body { padding:14px 16px; display:flex; flex-direction:column; gap:10px; flex:1; min-height:0; }
+  .url-row { display:flex; gap:8px; align-items:stretch; flex-shrink:0; }
+  .url-body input[type="url"] {
+    flex:1; min-width:0;
+    background:var(--panel-2); border:1px solid var(--line-strong); border-radius:8px;
+    padding:9px 11px; color:var(--ink); font-family:inherit; font-size:13px; outline:none;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .url-body input[type="url"]::placeholder { color:var(--muted-2); }
+  .url-body input[type="url"]:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow); }
+  .url-body input[type="url"]:disabled { background:var(--bg); color:var(--muted-2); border-style:dashed; }
+  .url-open {
+    display:inline-flex; align-items:center; padding:0 12px; font-size:12px;
+    color:var(--accent-bright); text-decoration:none; flex-shrink:0;
+    border:1px solid var(--line-strong); border-radius:8px;
+    background:var(--panel-2); transition:all .14s; white-space:nowrap;
+  }
+  .url-open:hover { background:var(--elevated); border-color:var(--accent); }
+  .url-open[aria-disabled="true"] { color:var(--muted-2); pointer-events:none; opacity:.5; }
+  /* iframe プレビュー領域 */
+  .url-preview-frame {
+    position:relative; flex:1; min-height:0;
+    background:var(--bg-2); border:1px solid var(--line); border-radius:8px;
+    overflow:hidden; display:flex; flex-direction:column;
+  }
+  .url-preview-frame iframe {
+    flex:1; width:100%; border:0; background:#fff;
+    display:none;   /* URL未設定時は非表示 */
+  }
+  .url-preview-frame.has iframe { display:block; }
+  .url-preview-empty {
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    padding:20px; text-align:center; color:var(--muted-2); font-size:12px;
+  }
+  .url-preview-frame.has .url-preview-empty { display:none; }
+  .url-preview-hint {
+    flex-shrink:0; padding:8px 12px; font-size:11px; color:var(--muted);
+    background:var(--bg); border-top:1px solid var(--line); line-height:1.5;
+    display:none;
+  }
+  .url-preview-frame.has .url-preview-hint { display:block; }
+
   /* 候補 */
   .suggest {
     position:absolute; left:0; top:calc(100% + 2px); z-index:30;
@@ -250,6 +324,7 @@
     overflow:hidden; transition:width .22s cubic-bezier(.4,0,.2,1);
   }
   .memo-panel.open { width:380px; }
+  .memo-panel.url-panel.open { width:480px; }
   @media (max-width:760px){ .memo-panel.open { width:100%; position:absolute; right:0; top:0; bottom:0; z-index:50; } }
   /* スマホ:左右パディングを詰めて、横スクロール時の左右の余白ズレ(グラグラ)を抑える */
   @media (max-width:760px){
@@ -410,13 +485,65 @@
 </style>
 <script type="module">
   // Firebase 初期化(Firestore でデータをクラウド保存・複数端末で自動同期)
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getFirestore, doc, setDoc, onSnapshot }
-    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged }
-    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  // ※ ?demo モードでは Firebase を一切読み込まない(オフライン/プレビュー用)
 
-  const firebaseConfig = {
+  /* =========================================================
+     仮機能:?demo クエリ付きでアクセスするとサンプルデータを表示する
+     (Firebase に繋がない・保存もしない。確認用。不要になったらこのブロックごと削除)
+     ========================================================= */
+  const isDemo = new URLSearchParams(location.search).has("demo");
+  if(isDemo){
+    const DEMO_DATA = {
+      persons:{ p1:"みん", p2:"ささん", p3:"ぬい", p4:"かろ" },
+      items:{
+        i1:"青薔薇", i2:"たこやき", i3:"手紙",
+        i4:"クロワッサン", i5:"桜餅", i6:"ラブレター"
+      },
+      titles:{
+        t1:"バラ色の日々", t2:"木蘭の涙", t3:"さよならエレジー",
+        t4:"家族になろうよ", t5:"ずっと好きだった", t6:"365日"
+      },
+      notes:{
+        t1:"サンプルメモ。同じタイトルの行で共有されます。",
+        t5:"桜の季節にぴったり"
+      },
+      urls:{
+        t1:"https://example.com/",
+        t4:"https://example.org/"
+      },
+      records:[
+        {id:"r1", personId:"p1", itemId:"i1", titleId:"t1", done:true,  created:1700000000000},
+        {id:"r2", personId:"p2", itemId:"i1", titleId:"t1", done:false, created:1700000001000},
+        {id:"r3", personId:"p1", itemId:"i2", titleId:"t2", done:true,  created:1700000002000},
+        {id:"r4", personId:"p1", itemId:"i3", titleId:"t3", done:false, created:1700000003000},
+        {id:"r5", personId:"p3", itemId:"i4", titleId:"t4", done:true,  created:1700000004000},
+        {id:"r6", personId:"p4", itemId:"i5", titleId:"t5", done:false, created:1700000005000},
+        {id:"r7", personId:"p3", itemId:"i6", titleId:"t6", done:true,  created:1700000006000},
+        {id:"r8", personId:"p2", itemId:"i6", titleId:"t6", done:false, created:1700000007000}
+      ]
+    };
+    let demoDb = JSON.parse(JSON.stringify(DEMO_DATA));
+    let demoListener = null;
+    window.__cloud = {
+      ready:true, uid:"demo-user",
+      save(data){ demoDb = JSON.parse(JSON.stringify(data)); if(demoListener) demoListener(demoDb); return Promise.resolve(); },
+      subscribe(cb){
+        demoListener = cb;
+        setTimeout(()=>cb(JSON.parse(JSON.stringify(demoDb))), 50);
+        return ()=>{ demoListener=null; };
+      }
+    };
+    window.dispatchEvent(new Event("cloud-ready"));
+    console.log("Running in DEMO mode (no Firebase). Remove ?demo to use real data.");
+  } else {
+    // 通常モード:Firebase を動的にロードしてから初期化
+    const [{ initializeApp }, { getFirestore, doc, setDoc, onSnapshot }, { getAuth, signInAnonymously, onAuthStateChanged }] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"),
+      import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"),
+      import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js")
+    ]);
+
+    const firebaseConfig = {
     apiKey: "AIzaSyBqVZkrGtOvvZ2edAHv15mGQT4UoX6QD1o",
     authDomain: "comment-manager-ec9d0.firebaseapp.com",
     projectId: "comment-manager-ec9d0",
@@ -462,6 +589,7 @@
     console.error("Anonymous sign-in failed:", err);
     window.dispatchEvent(new CustomEvent("cloud-error", { detail:{ phase:"auth", error:err } }));
   });
+  }   // end of: if(isDemo) ... else { ... }
 </script>
 </head>
 <body>
@@ -502,7 +630,7 @@
     <div class="sheet-wrap">
       <table id="sheet">
         <thead><tr>
-          <th class="col-check"></th><th class="col-num">#</th><th>Name</th><th>Item</th><th>Title</th><th class="col-date">Date</th><th class="col-memo">Memo</th>
+          <th class="col-check"></th><th class="col-num">#</th><th>Name</th><th>Item</th><th>Title</th><th class="col-url">URL</th><th class="col-date">Date</th><th class="col-memo">Memo</th>
         </tr></thead>
         <tbody id="tbody"></tbody>
       </table>
@@ -523,6 +651,30 @@
         <span class="saved" id="memoSaved"></span>
       </div>
     </aside>
+    <aside class="memo-panel url-panel" id="urlPanel">
+      <div class="memo-head">
+        <button class="memo-close-x" id="urlClose" title="Close" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <div class="lbl">URL</div>
+        <div class="ttl none" id="urlTitle">—</div>
+        <div class="memo-link-note" id="urlLinkNote"></div>
+      </div>
+      <div class="memo-body url-body">
+        <div class="url-row">
+          <input type="url" id="urlText" placeholder="https://…" autocomplete="off" spellcheck="false">
+          <a class="url-open" id="urlOpen" target="_blank" rel="noopener noreferrer" aria-disabled="true">Open ↗</a>
+        </div>
+        <div class="url-preview-frame" id="urlPreviewFrame">
+          <iframe id="urlIframe" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" loading="lazy"></iframe>
+          <div class="url-preview-empty" id="urlPreviewEmpty">URLを入力するとここにプレビューが表示されます</div>
+          <div class="url-preview-hint" id="urlPreviewHint">プレビューが表示できないサイトもあります。その場合は「Open ↗」で別タブで開けます。</div>
+        </div>
+      </div>
+      <div class="memo-foot">
+        <span class="saved" id="urlSaved"></span>
+      </div>
+    </aside>
     <div class="status-overlay" id="statusOverlay">
       <div class="status-box" id="statusBox">
         <div class="status-spinner" id="statusSpinner"></div>
@@ -537,7 +689,7 @@
 /* =========================================================
    モデル
    ========================================================= */
-let db={ persons:{}, items:{}, titles:{}, notes:{}, records:[] };
+let db={ persons:{}, items:{}, titles:{}, notes:{}, urls:{}, records:[] };
 let selectedRowId=null;
 let viewMode="flat";   // "flat" | "byPerson"
 let hideDone=false;
@@ -590,15 +742,17 @@ function normalizeRecords(){
 function applyCloudData(data){
   applyingRemote=true;
   try{
-    db=Object.assign({persons:{},items:{},titles:{},notes:{},records:[]}, data);
+    db=Object.assign({persons:{},items:{},titles:{},notes:{},urls:{},records:[]}, data);
     normalizeRecords();
     pruneEmptyRows();   // 受信データ内の空行(人物・アイテム・タイトルが全て空)を掃除
-    // メモパネルで選択中の行がクラウド更新で消えていたら閉じる
+    // 選択中の行がクラウド更新で消えていたらパネルを閉じる
     if(selectedRowId && !db.records.some(r=>r.id===selectedRowId)){
       selectedRowId=null;
       if(typeof memoPanel!=="undefined" && memoPanel) memoPanel.classList.remove("open");
-    } else if(selectedRowId && typeof refreshMemoPanel==="function"){
-      refreshMemoPanel();   // 残っていればメモ内容を最新に
+      if(typeof urlPanel!=="undefined" && urlPanel) urlPanel.classList.remove("open");
+    } else if(selectedRowId){
+      if(typeof refreshMemoPanel==="function" && memoPanel && memoPanel.classList.contains("open")) refreshMemoPanel();
+      if(typeof refreshUrlPanel==="function" && urlPanel && urlPanel.classList.contains("open")) refreshUrlPanel();
     }
     render();
   } finally {
@@ -614,7 +768,7 @@ function gcMasters(){
   db.records.forEach(r=>{ uP.add(r.personId); uI.add(r.itemId); uT.add(r.titleId); });
   for(const id in db.persons) if(!uP.has(id)) delete db.persons[id];
   for(const id in db.items)   if(!uI.has(id)) delete db.items[id];
-  for(const id in db.titles)  if(!uT.has(id)){ delete db.titles[id]; delete db.notes[id]; }
+  for(const id in db.titles)  if(!uT.has(id)){ delete db.titles[id]; delete db.notes[id]; delete db.urls[id]; }
 }
 const COLS=[
   { key:"personId", map:()=>db.persons, ph:"Name" },
@@ -770,7 +924,7 @@ function buildGroupHead(name, done, total, isUnassigned, pid, collapsed){
     if(collapsed) tr.classList.add("collapsed");
   }
   const td=document.createElement("td");
-  td.colSpan=7;
+  td.colSpan=8;
   const wrap=document.createElement("div"); wrap.className="gh";
   let inner="";
   if(toggleable){
@@ -871,6 +1025,30 @@ function buildRow(rec, num, isAdder, adderPerson){
     tr.appendChild(td);
   });
 
+  // URLセル(Titleと1:1。クリックでURLパネルを開く)
+  const tdUrl=document.createElement("td"); tdUrl.className="url-cell";
+  if(!isAdder){
+    const url=(db.urls[rec.titleId]||"").trim();
+    if(url) tdUrl.classList.add("has-url");
+
+    const preview=document.createElement("span");
+    preview.className="url-preview";
+    preview.textContent = url ? prettyUrl(url) : "";
+
+    const dot=document.createElement("div"); dot.className="url-dot";
+    if(url){ dot.classList.add("has"); dot.innerHTML="&#128279;"; }
+    else dot.textContent="+";
+    dot.title = rec.titleId==="" ? "Enter a title first" : "Open URL";
+
+    const open=()=>{ if(!rec.done) selectRowUrl(rec.id); };
+    dot.addEventListener("click", open);
+    preview.addEventListener("click", open);
+
+    tdUrl.appendChild(preview);
+    tdUrl.appendChild(dot);
+  }
+  tr.appendChild(tdUrl);
+
   // 日付セル(自動記録・クリックで手動編集可)
   const tdDate=document.createElement("td"); tdDate.className="date";
   if(!isAdder){
@@ -920,7 +1098,7 @@ function toggleDone(id, val){
   if(!rec) return;
   rec.done=val;
   // 完了にした行が選択中ならメモパネルを閉じる
-  if(val && selectedRowId===id){ selectedRowId=null; memoPanel.classList.remove("open"); }
+  if(val && selectedRowId===id){ selectedRowId=null; closeAllPanels(); }
   persist(); render();
 }
 
@@ -959,7 +1137,7 @@ function attachDateEvents(dcell, td, rec){
       // 人物・アイテム・タイトルがすべて空なら、この行ごと削除
       if(rec.personId==="" && rec.itemId==="" && rec.titleId===""){
         db.records = db.records.filter(r=>r.id!==rec.id);
-        if(selectedRowId===rec.id){ selectedRowId=null; memoPanel.classList.remove("open"); }
+        if(selectedRowId===rec.id){ selectedRowId=null; closeAllPanels(); }
         gcMasters(); persist(); render();
         return;
       }
@@ -1081,11 +1259,14 @@ function attachCellEvents(cell, td, rec, col, isAdder){
         // 3列すべて空になったらこの行を削除
         if(isEmptyRecord(rec)){
           db.records = db.records.filter(r=>r.id!==rec.id);
-          if(selectedRowId===rec.id){ selectedRowId=null; memoPanel.classList.remove("open"); }
+          if(selectedRowId===rec.id){ selectedRowId=null; closeAllPanels(); }
           gcMasters(); persist(); render();
           return;
         }
-        if(col.key==="titleId" && selectedRowId===rec.id) refreshMemoPanel();
+        if(col.key==="titleId" && selectedRowId===rec.id){
+          refreshMemoPanel();
+          if(typeof refreshUrlPanel==="function") refreshUrlPanel();
+        }
         render();   // メモバッジ・件数の更新のため
       }
       // 値が変わっていなければ再描画しない(無駄なチラつきを防ぐ)
@@ -1102,7 +1283,10 @@ const memoTitle=document.getElementById("memoTitle");
 const memoLinkNote=document.getElementById("memoLinkNote");
 const memoSaved=document.getElementById("memoSaved");
 
-function selectRow(id){ selectedRowId=id; memoPanel.classList.add("open"); refreshMemoPanel(); render(); }
+function selectRow(id){
+  if(urlPanel && urlPanel.classList.contains("open")){ urlPanel.classList.remove("open"); }
+  selectedRowId=id; memoPanel.classList.add("open"); refreshMemoPanel(); render();
+}
 function refreshMemoPanel(){
   const rec=db.records.find(r=>r.id===selectedRowId);
   if(!rec){ memoPanel.classList.remove("open"); return; }
@@ -1136,6 +1320,11 @@ function closeMemo(){
   selectedRowId=null;
   render();
 }
+/* 両パネルを閉じる(行削除・完了時などに使う) */
+function closeAllPanels(){
+  if(memoPanel) memoPanel.classList.remove("open");
+  if(typeof urlPanel!=="undefined" && urlPanel) urlPanel.classList.remove("open");
+}
 document.getElementById("memoClose").addEventListener("click", closeMemo);
 
 /* パネルの外側をクリックしたら閉じる(パネル内・メモアイコン・プレビューは除く) */
@@ -1147,6 +1336,104 @@ document.addEventListener("mousedown",(e)=>{
   if(e.target.closest(".memo-dot") || e.target.closest(".memo-preview")) return;
   closeMemo();
 });
+
+/* =========================================================
+   URLパネル(Memo と同じ作り。Title と 1:1)
+   ========================================================= */
+const urlPanel=document.getElementById("urlPanel");
+const urlText=document.getElementById("urlText");
+const urlTitleEl=document.getElementById("urlTitle");
+const urlLinkNote=document.getElementById("urlLinkNote");
+const urlSaved=document.getElementById("urlSaved");
+const urlOpenLink=document.getElementById("urlOpen");
+const urlIframe=document.getElementById("urlIframe");
+const urlPreviewFrame=document.getElementById("urlPreviewFrame");
+
+function isValidHttpUrl(s){
+  s=String(s||"").trim();
+  return /^https?:\/\/\S+/i.test(s);
+}
+
+function selectRowUrl(id){
+  // URLパネルを開く時はメモパネルを閉じる(同時に2つ開かない)
+  if(memoPanel.classList.contains("open")){ memoPanel.classList.remove("open"); }
+  selectedRowId=id; urlPanel.classList.add("open"); refreshUrlPanel(); loadIframeFromInput(); render();
+}
+function refreshUrlPanel(){
+  const rec=db.records.find(r=>r.id===selectedRowId);
+  if(!rec){ urlPanel.classList.remove("open"); return; }
+  const tText=masterText(db.titles, rec.titleId);
+  if(rec.titleId===""){
+    urlTitleEl.textContent="No title"; urlTitleEl.classList.add("none");
+    urlText.value=""; urlText.disabled=true; urlLinkNote.textContent="Enter a title to add a URL";
+  } else {
+    urlTitleEl.textContent=tText; urlTitleEl.classList.remove("none");
+    urlText.disabled=false;
+    if(document.activeElement!==urlText){ urlText.value=db.urls[rec.titleId]||""; }
+    const cnt=titleUseCount(rec.titleId);
+    urlLinkNote.textContent = cnt>1 ? ("Shared across "+cnt+" rows") : "";
+  }
+  refreshUrlOpenLink();
+  urlSaved.textContent="";
+}
+function refreshUrlOpenLink(){
+  const v=(urlText.value||"").trim();
+  if(isValidHttpUrl(v)){
+    urlOpenLink.href=v; urlOpenLink.setAttribute("aria-disabled","false");
+  } else {
+    urlOpenLink.removeAttribute("href"); urlOpenLink.setAttribute("aria-disabled","true");
+  }
+}
+/* iframe にURLを反映。連続入力での重い読み込みを避け、blur や Enter のときに呼ぶ。
+   現在の iframe src と同じなら再読み込みしない(チラつき防止)。 */
+function loadIframeFromInput(){
+  const v=(urlText.value||"").trim();
+  if(isValidHttpUrl(v)){
+    if(urlIframe.src !== v){ urlIframe.src = v; }
+    urlPreviewFrame.classList.add("has");
+  } else {
+    if(urlIframe.src){ urlIframe.removeAttribute("src"); }
+    urlPreviewFrame.classList.remove("has");
+  }
+}
+let urlSaveTimer=null;
+urlText.addEventListener("input",()=>{
+  const rec=db.records.find(r=>r.id===selectedRowId);
+  if(!rec || rec.titleId==="") return;
+  db.urls[rec.titleId]=urlText.value; persist();
+  urlSaved.textContent="Saved";
+  clearTimeout(urlSaveTimer); urlSaveTimer=setTimeout(()=>urlSaved.textContent="",1500);
+  refreshUrlOpenLink();
+  render();   // 一覧のプレビューを即時更新(iframe はここでは更新しない)
+});
+// 入力確定:blur または Enter で iframe を読み込み
+urlText.addEventListener("blur", loadIframeFromInput);
+urlText.addEventListener("keydown",(e)=>{
+  if(e.key==="Enter"){ e.preventDefault(); urlText.blur(); loadIframeFromInput(); }
+});
+function closeUrl(){
+  if(!urlPanel.classList.contains("open")) return;
+  urlPanel.classList.remove("open");
+  // iframe を停止(裏でリソース消費しないよう src を外す)
+  if(urlIframe.src){ urlIframe.removeAttribute("src"); }
+  urlPreviewFrame.classList.remove("has");
+  selectedRowId=null;
+  render();
+}
+document.getElementById("urlClose").addEventListener("click", closeUrl);
+document.addEventListener("mousedown",(e)=>{
+  if(!urlPanel.classList.contains("open")) return;
+  if(urlPanel.contains(e.target)) return;
+  if(e.target.closest(".url-dot") || e.target.closest(".url-preview")) return;
+  closeUrl();
+});
+
+/* URL の見た目を整える(https://, www. を取って短く) */
+function prettyUrl(u){
+  let s=String(u||"").trim();
+  s=s.replace(/^https?:\/\//i,"").replace(/^www\./i,"").replace(/\/$/,"");
+  return s;
+}
 
 /* =========================================================
    JSON 入出力
@@ -1163,12 +1450,12 @@ function importJSON(file){
     const data=JSON.parse(r.result);
     if(!data.records||!data.persons) throw new Error("Invalid format");
     if(!confirm("Replace current data with the imported file?")) return;
-    db=Object.assign({persons:{},items:{},titles:{},notes:{},records:[]}, data);
+    db=Object.assign({persons:{},items:{},titles:{},notes:{},urls:{},records:[]}, data);
     db.records.forEach((r,i)=>{
       if(typeof r.done!=="boolean") r.done=false;
       if(typeof r.created!=="number") r.created = Date.now() - (db.records.length-i)*1000;
     });
-    selectedRowId=null; memoPanel.classList.remove("open"); persist(); render(); alert("Imported.");
+    selectedRowId=null; closeAllPanels(); persist(); render(); alert("Imported.");
   }catch(e){ alert("Could not import: "+e.message); } };
   r.readAsText(file);
 }
@@ -1207,7 +1494,7 @@ document.addEventListener("keydown",(e)=>{
   if(e.key==="Delete" && selectedRowId && document.activeElement===document.body){
     if(confirm("Delete the selected row?")){
       db.records=db.records.filter(r=>r.id!==selectedRowId);
-      selectedRowId=null; memoPanel.classList.remove("open"); gcMasters(); persist(); render();
+      selectedRowId=null; closeAllPanels(); gcMasters(); persist(); render();
     }
   }
 });
