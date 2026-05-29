@@ -325,7 +325,7 @@
   }
   .memo-panel.open { width:380px; }
   .memo-panel.url-panel.open { width:480px; }
-  @media (max-width:760px){ .memo-panel.open { width:100%; position:absolute; right:0; top:0; bottom:0; z-index:50; } }
+  @media (max-width:760px){ .memo-panel.open, .memo-panel.url-panel.open { width:100%; position:absolute; right:0; top:0; bottom:0; z-index:50; } }
   /* スマホ:左右パディングを詰めて、横スクロール時の左右の余白ズレ(グラグラ)を抑える */
   @media (max-width:760px){
     .sheet-wrap { padding:0 0 80px; }
