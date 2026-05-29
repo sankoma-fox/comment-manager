@@ -743,6 +743,19 @@ function applyCloudData(data){
   try{
     db=Object.assign({persons:{},items:{},titles:{},notes:{},urls:{},records:[]}, data);
     normalizeRecords();
+    // 旧形式の移行:db.notes(titleIdキー)が残っていれば各行の rec.memo にコピーして notes を空にする
+    const legacyNotes = db.notes || {};
+    let migrated = false;
+    if(legacyNotes && Object.keys(legacyNotes).length>0){
+      db.records.forEach(r=>{
+        if((!r.memo || r.memo==="") && r.titleId && legacyNotes[r.titleId]){
+          r.memo = legacyNotes[r.titleId];
+          migrated = true;
+        }
+      });
+      db.notes = {};   // 移行済みフラグ代わりに空に
+      migrated = true;
+    }
     pruneEmptyRows();   // 受信データ内の空行(人物・アイテム・タイトルが全て空)を掃除
     // 選択中の行がクラウド更新で消えていたらパネルを閉じる
     if(selectedRowId && !db.records.some(r=>r.id===selectedRowId)){
@@ -754,6 +767,8 @@ function applyCloudData(data){
       if(typeof refreshUrlPanel==="function" && urlPanel && urlPanel.classList.contains("open")) refreshUrlPanel();
     }
     render();
+    // 移行があれば applyingRemote 終了後に永続化(applyingRemote 中は persist がスキップされるため)
+    if(migrated){ setTimeout(()=>persist(), 0); }
   } finally {
     applyingRemote=false;
   }
@@ -767,7 +782,7 @@ function gcMasters(){
   db.records.forEach(r=>{ uP.add(r.personId); uI.add(r.itemId); uT.add(r.titleId); });
   for(const id in db.persons) if(!uP.has(id)) delete db.persons[id];
   for(const id in db.items)   if(!uI.has(id)) delete db.items[id];
-  for(const id in db.titles)  if(!uT.has(id)){ delete db.titles[id]; delete db.notes[id]; delete db.urls[id]; }
+  for(const id in db.titles)  if(!uT.has(id)){ delete db.titles[id]; delete db.urls[id]; }
 }
 const COLS=[
   { key:"personId", map:()=>db.persons, ph:"Name" },
@@ -1049,22 +1064,19 @@ function buildRow(rec, num, isAdder, adderPerson){
 
   const tdMemo=document.createElement("td"); tdMemo.className="memo-cell";
   if(!isAdder){
-    const memo=(db.notes[rec.titleId]||"").trim();
-    const cnt=titleUseCount(rec.titleId);
+    const memo=(rec.memo||"").trim();
     if(memo) tdMemo.classList.add("has-memo");   // メモ有無で表示を出し分け
 
     // 冒頭文プレビュー(広い画面でのみ表示。1行・はみ出しは…で省略)
     const preview=document.createElement("span");
     preview.className="memo-preview";
-    // 改行は空白に置換して1行に
     preview.textContent = memo ? memo.replace(/\s+/g," ") : "";
 
     const dot=document.createElement("div"); dot.className="memo-dot";
-    if(memo){ dot.classList.add("has"); dot.innerHTML="&#9998;"+(cnt>1?'<span class="badge">'+cnt+'</span>':''); }
+    if(memo){ dot.classList.add("has"); dot.innerHTML="&#9998;"; }
     else dot.textContent="+";
-    dot.title = rec.titleId==="" ? "Enter a title first" : "Open memo";
+    dot.title = "Open memo";
 
-    // プレビューもクリックでメモを開けるように
     const open=()=>{ selectRow(rec.id); };
     dot.addEventListener("click", open);
     preview.addEventListener("click", open);
@@ -1288,25 +1300,24 @@ function selectRow(id){
 function refreshMemoPanel(){
   const rec=db.records.find(r=>r.id===selectedRowId);
   if(!rec){ memoPanel.classList.remove("open"); return; }
+  // タイトルがあれば見出しに、なければ Item/Name から拾う(行ごとのメモなので入力は常に可能)
   const tText=masterText(db.titles, rec.titleId);
-  if(rec.titleId===""){
-    memoTitle.textContent="No title"; memoTitle.classList.add("none");
-    memoText.value=""; memoText.disabled=true; memoLinkNote.textContent="Enter a title to add a memo";
-  } else {
-    memoTitle.textContent=tText; memoTitle.classList.remove("none");
-    memoText.disabled=false;
-    // 入力中(textareaにフォーカス)ならクラウド更新で上書きしない
-    if(document.activeElement!==memoText){ memoText.value=db.notes[rec.titleId]||""; }
-    const cnt=titleUseCount(rec.titleId);
-    memoLinkNote.textContent = cnt>1 ? ("Shared across "+cnt+" rows") : "";
-  }
+  const iText=masterText(db.items, rec.itemId);
+  const pText=masterText(db.persons, rec.personId);
+  const heading = tText || iText || pText || "Untitled";
+  memoTitle.textContent = heading;
+  if(tText) memoTitle.classList.remove("none"); else memoTitle.classList.add("none");
+  memoText.disabled=false;
+  // 入力中(textareaにフォーカス)ならクラウド更新で上書きしない
+  if(document.activeElement!==memoText){ memoText.value=rec.memo||""; }
+  memoLinkNote.textContent="";   // 共有件数表示は廃止(行ごとに独立)
   memoSaved.textContent="";
 }
 let saveTimer=null;
 memoText.addEventListener("input",()=>{
   const rec=db.records.find(r=>r.id===selectedRowId);
-  if(!rec || rec.titleId==="") return;
-  db.notes[rec.titleId]=memoText.value; persist();
+  if(!rec) return;
+  rec.memo=memoText.value; persist();
   memoSaved.textContent="Saved";
   clearTimeout(saveTimer); saveTimer=setTimeout(()=>memoSaved.textContent="",1500);
   render();
