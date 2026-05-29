@@ -610,7 +610,7 @@
         <span class="switch-label">Group</span>
       </label>
       <label class="switch" id="hideSwitch" title="完了した行を隠す">
-        <input type="checkbox" id="hideDone">
+        <input type="checkbox" id="hideDone" checked>
         <span class="track"><span class="thumb"></span></span>
         <span class="switch-label">Hide</span>
       </label>
@@ -691,7 +691,7 @@
 let db={ persons:{}, items:{}, titles:{}, notes:{}, urls:{}, records:[] };
 let selectedRowId=null;
 let viewMode="flat";   // "flat" | "byPerson"
-let hideDone=false;
+let hideDone=true;
 let searchQuery="";   // 検索文字列(Name/Item/Title を対象に絞り込み)
 const expandedGroups=new Set();   // 展開中の人物ID(グループ表示の開閉状態。既定は空=すべて閉じる。表示設定なので保存しない)
 
