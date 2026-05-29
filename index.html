@@ -193,7 +193,7 @@
   }
   td.date.focus { box-shadow:inset 0 0 0 1.5px var(--accent); background:var(--elevated); border-radius:7px; z-index:8; }
   td.date.focus .dcell { color:#fff; }
-  tbody tr.done td.date .dcell { color:var(--muted-2); opacity:.6; pointer-events:none; }
+  tbody tr.done td.date .dcell { color:var(--muted-2); opacity:.6; }
 
   td.memo-cell { text-align:center; width:62px; padding:0 10px; }
   td.memo-cell > * { vertical-align:middle; }
@@ -204,7 +204,7 @@
     line-height:var(--row-h); flex:1; min-width:0; text-align:left;
   }
   .memo-preview:hover { color:var(--ink-dim); }
-  tbody tr.done .memo-preview { color:var(--muted-2); opacity:.6; pointer-events:none; }
+  tbody tr.done .memo-preview { color:var(--muted-2); opacity:.6; }
   .memo-dot {
     display:inline-flex; align-items:center; justify-content:center; width:30px; height:26px;
     border-radius:7px; font-size:12px; cursor:pointer; color:var(--muted);
@@ -239,7 +239,7 @@
     line-height:var(--row-h); flex:1; min-width:0; text-align:left;
   }
   .url-preview:hover { color:var(--ink-dim); }
-  tbody tr.done .url-preview { color:var(--muted-2); opacity:.6; pointer-events:none; }
+  tbody tr.done .url-preview { color:var(--muted-2); opacity:.6; }
   .url-dot {
     display:inline-flex; align-items:center; justify-content:center; width:30px; height:26px;
     border-radius:7px; font-size:13px; cursor:pointer; color:var(--muted);
@@ -258,7 +258,7 @@
     td.url-cell:not(.has-url) .url-preview { display:none; }
     td.url-cell:not(.has-url) .url-dot { display:inline-flex; margin-left:auto; }
   }
-  tbody tr.done .url-dot { opacity:.4; pointer-events:none; }
+  tbody tr.done .url-dot { opacity:.4; }
 
   /* URLパネル本体(memo-panel と同じ枠を使い、入力欄+iframeプレビューを縦に並べる) */
   .url-body { padding:14px 16px; display:flex; flex-direction:column; gap:10px; flex:1; min-height:0; }
@@ -443,10 +443,9 @@
   tbody tr.done:hover td:not(.num):not(.check) { background:var(--bg-2); }
   tbody tr.done .cell {
     color:var(--muted-2);
-    pointer-events:none;
   }
-  tbody tr.done td.data { cursor:default; }
-  tbody tr.done .memo-dot { opacity:.4; pointer-events:none; }
+  tbody tr.done td.data { cursor:text; }
+  tbody tr.done .memo-dot { opacity:.4; }
   tbody tr.done td.num { color:var(--muted-2); opacity:.6; }
 
   /* 人物別グループ見出し */
@@ -630,7 +629,7 @@
     <div class="sheet-wrap">
       <table id="sheet">
         <thead><tr>
-          <th class="col-check"></th><th class="col-num">#</th><th>Name</th><th>Item</th><th>Title</th><th class="col-url">URL</th><th class="col-date">Date</th><th class="col-memo">Memo</th>
+          <th class="col-check"></th><th class="col-num">#</th><th class="col-date">Date</th><th>Name</th><th>Item</th><th>Title</th><th class="col-url">URL</th><th class="col-memo">Memo</th>
         </tr></thead>
         <tbody id="tbody"></tbody>
       </table>
@@ -995,12 +994,26 @@ function buildRow(rec, num, isAdder, adderPerson){
   tdNum.className="num"; tdNum.textContent=isAdder?"+":num;
   tr.appendChild(tdNum);
 
+  // 日付セル(自動記録・クリックで手動編集可) — 番号の右に配置
+  const tdDate=document.createElement("td"); tdDate.className="date";
+  if(!isAdder){
+    const dcell=document.createElement("div");
+    dcell.className="dcell";
+    dcell.contentEditable = "true";
+    dcell.spellcheck=false;
+    dcell.dataset.dateRow=rec.id;
+    const f=fmtDate(rec.created);
+    dcell.textContent = f ? f.date : "";
+    attachDateEvents(dcell, tdDate, rec);
+    tdDate.appendChild(dcell);
+  }
+  tr.appendChild(tdDate);
+
   COLS.forEach(col=>{
     const td=document.createElement("td"); td.className="data";
     const cell=document.createElement("div");
     cell.className="cell";
-    const editable = !(rec && rec.done);   // 完了行は編集不可
-    cell.contentEditable = editable ? "true" : "false";
+    cell.contentEditable = "true";
     cell.spellcheck=false;
     cell.dataset.col=col.key;
     cell.dataset.ph=col.ph;
@@ -1036,11 +1049,11 @@ function buildRow(rec, num, isAdder, adderPerson){
     preview.textContent = url ? prettyUrl(url) : "";
 
     const dot=document.createElement("div"); dot.className="url-dot";
-    if(url){ dot.classList.add("has"); dot.innerHTML="&#128279;"; }
+    if(url){ dot.classList.add("has"); dot.innerHTML='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l3.54-3.54a5 5 0 0 0-7.07-7.07l-1.41 1.41"/><path d="M14 11a5 5 0 0 0-7.07 0l-3.54 3.54a5 5 0 0 0 7.07 7.07l1.41-1.41"/></svg>'; }
     else dot.textContent="+";
     dot.title = rec.titleId==="" ? "Enter a title first" : "Open URL";
 
-    const open=()=>{ if(!rec.done) selectRowUrl(rec.id); };
+    const open=()=>{ selectRowUrl(rec.id); };
     dot.addEventListener("click", open);
     preview.addEventListener("click", open);
 
@@ -1048,21 +1061,6 @@ function buildRow(rec, num, isAdder, adderPerson){
     tdUrl.appendChild(dot);
   }
   tr.appendChild(tdUrl);
-
-  // 日付セル(自動記録・クリックで手動編集可)
-  const tdDate=document.createElement("td"); tdDate.className="date";
-  if(!isAdder){
-    const dcell=document.createElement("div");
-    dcell.className="dcell";
-    dcell.contentEditable = rec.done ? "false" : "true";
-    dcell.spellcheck=false;
-    dcell.dataset.dateRow=rec.id;
-    const f=fmtDate(rec.created);
-    dcell.textContent = f ? f.date : "";
-    attachDateEvents(dcell, tdDate, rec);
-    tdDate.appendChild(dcell);
-  }
-  tr.appendChild(tdDate);
 
   const tdMemo=document.createElement("td"); tdMemo.className="memo-cell";
   if(!isAdder){
@@ -1082,7 +1080,7 @@ function buildRow(rec, num, isAdder, adderPerson){
     dot.title = rec.titleId==="" ? "Enter a title first" : "Open memo";
 
     // プレビューもクリックでメモを開けるように
-    const open=()=>{ if(!rec.done) selectRow(rec.id); };
+    const open=()=>{ selectRow(rec.id); };
     dot.addEventListener("click", open);
     preview.addEventListener("click", open);
 
