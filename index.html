@@ -220,13 +220,13 @@
   /* 広い画面ではメモ列を広げ、冒頭文を1行プレビュー表示 */
   @media (min-width:1000px){
     th.col-memo { width:240px; text-align:left; padding-left:16px; }
-    td.memo-cell { width:240px; display:flex; align-items:center; gap:8px; padding:0 12px 0 16px; }
+    td.memo-cell { width:240px; padding:0 12px 0 16px; text-align:right; }
     /* メモがある行:プレビューのみ表示し、鉛筆アイコンは隠す */
-    td.memo-cell.has-memo .memo-preview { display:block; }
+    td.memo-cell.has-memo .memo-preview { display:block; text-align:left; }
     td.memo-cell.has-memo .memo-dot { display:none; }
     /* メモが空の行:プレビューは出さず、追加用アイコン(+)を表示 */
     td.memo-cell:not(.has-memo) .memo-preview { display:none; }
-    td.memo-cell:not(.has-memo) .memo-dot { display:inline-flex; margin-left:auto; }
+    td.memo-cell:not(.has-memo) .memo-dot { display:inline-flex; }
   }
 
   /* URL列(Title と 1:1。Memo と同じ作り) */
@@ -252,11 +252,11 @@
   }
   @media (min-width:1000px){
     th.col-url { width:200px; text-align:left; padding-left:16px; }
-    td.url-cell { width:200px; display:flex; align-items:center; gap:8px; padding:0 12px 0 16px; }
-    td.url-cell.has-url .url-preview { display:block; }
+    td.url-cell { width:200px; padding:0 12px 0 16px; text-align:right; }
+    td.url-cell.has-url .url-preview { display:block; text-align:left; }
     td.url-cell.has-url .url-dot { display:none; }
     td.url-cell:not(.has-url) .url-preview { display:none; }
-    td.url-cell:not(.has-url) .url-dot { display:inline-flex; margin-left:auto; }
+    td.url-cell:not(.has-url) .url-dot { display:inline-flex; }
   }
   tbody tr.done .url-dot { opacity:.4; }
 
@@ -629,7 +629,7 @@
     <div class="sheet-wrap">
       <table id="sheet">
         <thead><tr>
-          <th class="col-check"></th><th class="col-num">#</th><th class="col-date">Date</th><th>Name</th><th>Item</th><th>Title</th><th class="col-url">URL</th><th class="col-memo">Memo</th>
+          <th class="col-check"></th><th class="col-num">#</th><th>Name</th><th>Item</th><th>Title</th><th class="col-url">URL</th><th class="col-memo">Memo</th><th class="col-date">Date</th>
         </tr></thead>
         <tbody id="tbody"></tbody>
       </table>
@@ -994,21 +994,6 @@ function buildRow(rec, num, isAdder, adderPerson){
   tdNum.className="num"; tdNum.textContent=isAdder?"+":num;
   tr.appendChild(tdNum);
 
-  // 日付セル(自動記録・クリックで手動編集可) — 番号の右に配置
-  const tdDate=document.createElement("td"); tdDate.className="date";
-  if(!isAdder){
-    const dcell=document.createElement("div");
-    dcell.className="dcell";
-    dcell.contentEditable = "true";
-    dcell.spellcheck=false;
-    dcell.dataset.dateRow=rec.id;
-    const f=fmtDate(rec.created);
-    dcell.textContent = f ? f.date : "";
-    attachDateEvents(dcell, tdDate, rec);
-    tdDate.appendChild(dcell);
-  }
-  tr.appendChild(tdDate);
-
   COLS.forEach(col=>{
     const td=document.createElement("td"); td.className="data";
     const cell=document.createElement("div");
@@ -1088,6 +1073,21 @@ function buildRow(rec, num, isAdder, adderPerson){
     tdMemo.appendChild(dot);
   }
   tr.appendChild(tdMemo);
+
+  // 日付セル(自動記録・クリックで手動編集可) — 行の右端
+  const tdDate=document.createElement("td"); tdDate.className="date";
+  if(!isAdder){
+    const dcell=document.createElement("div");
+    dcell.className="dcell";
+    dcell.contentEditable = "true";
+    dcell.spellcheck=false;
+    dcell.dataset.dateRow=rec.id;
+    const f=fmtDate(rec.created);
+    dcell.textContent = f ? f.date : "";
+    attachDateEvents(dcell, tdDate, rec);
+    tdDate.appendChild(dcell);
+  }
+  tr.appendChild(tdDate);
   return tr;
 }
 
